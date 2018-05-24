@@ -1,0 +1,6 @@
+klarna-js-sdk:
+  js:
+    https://x.klarnacdn.net/kp/lib/v1/api.js: { type: external }
+    js/klarna.js: {}
+  dependencies:
+    - core/drupalSettings

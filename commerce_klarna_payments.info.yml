@@ -1,0 +1,5 @@
+name: Commerce Klarna payments
+type: module
+description: 'Commerce integration for Klarna payments'
+core: 8.x
+package: 'Custom'
