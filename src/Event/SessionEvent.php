@@ -39,10 +39,10 @@ final class SessionEvent extends Event {
   /**
    * Gets the request.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface|null
    *   The klarna request.
    */
-  public function getRequest() : RequestInterface {
+  public function getRequest() : ? RequestInterface {
     return $this->request;
   }
 

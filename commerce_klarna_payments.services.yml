@@ -1,4 +1,8 @@
 services:
+  logger.channel.commerce_klarna_payments:
+    parent: logger.channel_base
+    arguments: ['commerce_klarna_payments']
+
   commerce_klarna_payments.session_subscriber:
     class: Drupal\commerce_klarna_payments\EventSubscriber\SessionSubscriber
     arguments: ['@commerce_klarna_payments.request_builder']
@@ -6,5 +10,5 @@ services:
       - { name: event_subscriber }
 
   commerce_klarna_payments.request_builder:
-    class: Drupal\commerce_klarna_payments\Klarna\Services\RequestBuilder
+    class: Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilder
     arguments: ['@event_dispatcher']

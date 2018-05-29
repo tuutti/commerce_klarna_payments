@@ -201,7 +201,7 @@ class Request implements RequestInterface {
    * {@inheritdoc}
    */
   public function toArray() : array {
-    $request = [];
+    $data = [];
     foreach ($this->data as $key => $value) {
       $normalized = $value;
 
@@ -209,9 +209,22 @@ class Request implements RequestInterface {
         // Normalize object values.
         $normalized = $value->toArray();
       }
-      $request[$key] = $normalized;
+
+      // Handle multivalue fields.
+      if (is_array($value)) {
+        $normalized = [];
+        foreach ($value as $k => $v) {
+          $normalized[] = $v->toArray();
+        }
+      }
+      // Convert empty arrays to NULL.
+      if (is_array($normalized) && !$normalized) {
+        $normalized = NULL;
+      }
+      $data[$key] = $normalized;
     }
-    return $request;
+
+    return $data;
   }
 
 }

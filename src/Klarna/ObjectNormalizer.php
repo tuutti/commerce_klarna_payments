@@ -19,7 +19,9 @@ trait ObjectNormalizer {
     if (!property_exists($this, 'data')) {
       throw new \LogicException('$this->data not defined.');
     }
-    return $this->data;
+    return array_filter($this->data, function ($value) {
+      return $value !== NULL && $value !== '';
+    });
   }
 
 }

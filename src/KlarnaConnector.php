@@ -6,10 +6,14 @@ namespace Drupal\commerce_klarna_payments;
 
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\SessionEvent;
+use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
+use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
+use Drupal\commerce_klarna_payments\Klarna\Payment\Authorization;
 use Drupal\commerce_klarna_payments\Klarna\Payment\Session;
 use Drupal\commerce_klarna_payments\Klarna\SessionContainer;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
+use GuzzleHttp\Exception\ClientException;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -90,16 +94,40 @@ final class KlarnaConnector {
     return new Session($this->getConnector(), $sessionId);
   }
 
+  public function authorizeOrder(OrderInterface $order, string $authorizeToken) : AuthorizationResponse {
+    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
+    $event = $this->eventDispatcher
+      ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
+    $build = $event->getRequest()->toArray();
+
+    $authorizer = new Authorization($this->getConnector(), $authorizeToken);
+    $authorizer->create($build);
+
+    if (!isset($authorizer['fraud_status'], $authorizer['redirect_url'], $authorizer['order_id'])) {
+      throw new \InvalidArgumentException('Authorization validation failed.');
+    }
+
+    $response = AuthorizationResponse::createFromRequest($authorizer);
+
+    if (!$response->isValid() && !$response->isPending()) {
+      throw new FraudException('Fraud validation failed.');
+    }
+    $order->setData('klarna_order_id', $response->getOrderId())
+      ->save();
+
+    return $response;
+  }
+
   /**
    * Builds a new order transaction.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\SessionContainer
-   *   The Klarna session container.
+   * @return array
+   *   The Klarna request data.
    */
-  public function buildTransaction(OrderInterface $order) : SessionContainer {
+  public function buildTransaction(OrderInterface $order) : array {
     /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
     $event = $this->eventDispatcher
       ->dispatch(Events::SESSION_CREATE, new SessionEvent($order));
@@ -116,7 +144,7 @@ final class KlarnaConnector {
         $session->update($build);
         $session->fetch();
       }
-      catch (ConnectorException $e) {
+      catch (ConnectorException | ClientException $e) {
         // Attempt to create new session session if update failed.
         // This usually happens when we have an expired session id
         // saved in commerce order.
@@ -129,7 +157,10 @@ final class KlarnaConnector {
       $order->setData('klarna_session_id', $session['session_id'])
         ->save();
     }
-    return new SessionContainer($event, $session['client_token']);
+    return $build + [
+      'client_token' => $session['client_token'],
+      'payment_method_category' => reset($session['payment_method_categories']),
+    ];
   }
 
 }

@@ -17,26 +17,28 @@
    */
   Drupal.behaviors.klarnaPayments = {
     loading: false,
+    settings: {},
 
     attach: function () {
       if (this.loading) {
         return;
       }
-      this.initialize(drupalSettings.klarnaPayments.client_token);
-      this.load('pay_later', 'klarna-payments-container');
-
-      // this.authorize('pay_later');
+      this.initialize(drupalSettings.klarnaPayments);
+      this.load(this.settings.payment_method_category.identifier, 'klarna-payments-container');
     },
 
-    initialize: function(token) {
+    initialize: function(settings) {
       this.loading = true;
+      this.settings = settings;
 
       Klarna.Payments.init({
-        client_token: token
+        client_token: settings.client_token
       });
     },
 
-    load: function(payment_method, container, data, callback) {
+    load: function(payment_method, container, data) {
+      var self = this;
+
       try {
         Klarna.Payments.load({
             container: '#' + container,
@@ -44,11 +46,10 @@
           },
           data,
           function (response) {
-            console.log(response);
-
-            if (callback) {
-              callback(response);
+            if (!response.show_form) {
+              throw 'Failed to initialize form.';
             }
+            self.authorize(payment_method);
           });
       }
       catch (e) {
@@ -56,22 +57,21 @@
       }
     },
 
-    sleep: function(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    },
-
-    authorize: async function(payment_method, data, callback) {
-      await this.sleep(2000);
-
+    authorize: function(payment_method, data) {
       Klarna.Payments.authorize({
-        payment_method_category: payment_method,
+        payment_method_category: payment_method
       },
         data,
         function (response) {
           console.log(response);
 
-          if (callback) {
-            callback(response);
+          if (response.approved && response.show_form) {
+            var input = document.querySelector('[klarna-selector="authorization-token"]');
+
+            if (typeof input === 'undefined') {
+              throw 'Authorization token input not found';
+            }
+            input.setAttribute('value', response.authorization_token);
           }
         });
       this.loading = false;

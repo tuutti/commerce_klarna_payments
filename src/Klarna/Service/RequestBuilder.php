@@ -6,19 +6,22 @@ namespace Drupal\commerce_klarna_payments\Klarna\Service;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
+use Drupal\commerce_klarna_payments\Klarna\Request\Address;
 use Drupal\commerce_klarna_payments\Klarna\Request\MerchantUrlset;
 use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
 use Drupal\commerce_klarna_payments\Klarna\Request\Request;
+use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Calculator;
-use Drupal\Core\Url;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Provides a request builder.
  */
 class RequestBuilder {
+
+  use OptionsHelper;
 
   /**
    * The event dispatcher.
@@ -136,35 +139,44 @@ class RequestBuilder {
       ->setPurchaseCountry($this->getStoreLanguage())
       ->setPurchaseCurrency($totalPrice->getCurrencyCode())
       ->setLocale($this->plugin->getLocale())
-      ->setBillingAddress($this->getBillingAddress())
       ->setOrderAmount((int) $totalPrice->multiply('100')->getNumber())
       ->setMerchantUrls(
         new MerchantUrlset([
-          'confirmation' => $this->getReturnUri('commerce_payment.checkout.return'),
-          'notify' => $this->getReturnUri('commerce_payment.notify', ['step' => 'complete']),
-          'push' => 'test',
+          'confirmation' => $this->plugin->getReturnUri($this->order, 'commerce_payment.checkout.return'),
+          'notification' => $this->plugin->getReturnUri($this->order, 'commerce_payment.notify', [
+            'step' => 'complete',
+          ]),
+          // 'push' => 'test',
         ])
       )
-      ->setOptions(NULL);
+      ->setOptions($this->getOptions());
 
+    if ($billingAddress = $this->getBillingAddress()) {
+      $request->setBillingAddress($billingAddress);
+    }
     $totalTax = 0;
 
     foreach ($this->order->getItems() as $item) {
+      $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
 
       $orderItem = (new OrderItem())
         ->setName($item->getTitle())
         ->setQuantity((int) $item->getQuantity())
-        ->setUnitPrice((int) $item->getUnitPrice()->multiply('100')->getNumber());
+        ->setUnitPrice($unitPrice)
+        ->setTotalAmount((int) ($unitPrice * $item->getQuantity()));
 
       foreach ($item->getAdjustments() as $adjustment) {
         // Only tax adjustments are supported by default.
         if ($adjustment->getType() !== 'tax') {
           continue;
         }
+        $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
         // Calculate order's total tax.
-        $totalTax += (int) $adjustment->getAmount()->multiply('100')->getNumber();
+        $totalTax += $tax;
         // Multiply tax rate to have two implicit decimals, 2500 = 25%.
-        $orderItem->setTaxRate((int) Calculator::multiply($adjustment->getPercentage(), '10000'));
+        $orderItem->setTaxRate((int) Calculator::multiply($adjustment->getPercentage(), '10000'))
+          // Calculate total tax for order item.
+          ->setTotalTaxAmount((int) ($tax * $item->getQuantity()));
       }
       $request->addOrderItem($orderItem);
     }
@@ -173,18 +185,49 @@ class RequestBuilder {
     return $request;
   }
 
-  protected function getBillingAddress() : AddressInterface {
-  }
+  /**
+   * Gets the billing address.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface|null
+   *   The billing address or null.
+   */
+  protected function getBillingAddress() : ? AddressInterface {
+    if (!$billingData = $this->order->getBillingProfile()) {
+      return NULL;
+    }
+    /** @var \Drupal\address\AddressInterface $address */
+    $address = $billingData->get('address')->first();
 
-  protected function getReturnUri(string $routeName, array $arguments = []) : string {
-    $arguments = array_merge($arguments, [
-      'step' => 'payment',
-      'commerce_order' => $this->order->id(),
-      'commerce_payment_gateway' => $this->plugin->getPluginId(),
-    ]);
+    $profile = (new Address())
+      ->setEmail($this->order->getEmail())
+      // Country must be populated if we update billing details.
+      ->setCountry($address->getCountryCode());
 
-    return (new Url($routeName, $arguments, ['absolute' => TRUE]))
-      ->toString();
+    if ($city = $address->getLocality()) {
+      $profile->setCity($city);
+    }
+
+    if ($addr = $address->getAddressLine1()) {
+      $profile->setStreetAddress($addr);
+    }
+
+    if ($addr2 = $address->getAddressLine2()) {
+      $profile->setStreetAddress2($addr2);
+    }
+
+    if ($firstName = $address->getGivenName()) {
+      $profile->setGivenName($firstName);
+    }
+
+    if ($lastName = $address->getFamilyName()) {
+      $profile->setFamilyName($lastName);
+    }
+
+    if ($postalCode = $address->getPostalCode()) {
+      $profile->setPostalCode($postalCode);
+    }
+
+    return $profile;
   }
 
   /**
@@ -204,7 +247,38 @@ class RequestBuilder {
    *   The request.
    */
   protected function createPlaceRequest() : RequestInterface {
-    return new Request();
+    $request = $this->createUpdateRequest();
+
+    $this->validate($request, [
+      'purchase_country',
+      'purchase_currency',
+      'locale',
+      'order_amount',
+      'order_lines',
+      'merchant_urls',
+      'billing_address',
+    ]);
+    return $request;
+  }
+
+  /**
+   * Validates the requests.
+   *
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface $request
+   *   The request.
+   * @param array $required
+   *   Required fields.
+   */
+  protected function validate(RequestInterface $request, array $required) : void {
+    $values = $request->toArray();
+
+    $missing = array_filter($required, function ($key) use ($values) {
+      return !isset($values[$key]);
+    });
+
+    if (count($missing) > 0) {
+      throw new \InvalidArgumentException(sprintf('Missing required values: %s', implode(',', $missing)));
+    }
   }
 
 }

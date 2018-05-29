@@ -5,6 +5,9 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_klarna_payments\KlarnaConnector;
+use Drupal\commerce_klarna_payments\OptionsHelper;
+use Drupal\commerce_klarna_payments\PluginConfigHelper;
+use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
@@ -12,7 +15,9 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotifications
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Url;
 use Klarna\Rest\Transport\ConnectorInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -29,6 +34,8 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * )
  */
 final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotificationsInterface {
+
+  use OptionsHelper;
 
   /**
    * The key used for EU region.
@@ -59,6 +66,13 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
   protected $connector;
 
   /**
+   * The logger.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $logger;
+
+  /**
    * {@inheritdoc}
    */
   public function __construct(
@@ -69,7 +83,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     PaymentTypeManager $payment_type_manager,
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
-    EventDispatcherInterface $eventDispatcher
+    EventDispatcherInterface $eventDispatcher,
+    LoggerInterface $logger
   ) {
     parent::__construct(
       $configuration,
@@ -83,6 +98,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
 
     $this->eventDispatcher = $eventDispatcher;
     $this->connector = new KlarnaConnector($eventDispatcher, $this);
+    $this->logger = $logger;
   }
 
   /**
@@ -97,7 +113,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
-      $container->get('event_dispatcher')
+      $container->get('event_dispatcher'),
+      $container->get('logger.channel.commerce_klarna_payments')
     );
   }
 
@@ -122,6 +139,16 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
    */
   public function getKlarnaConnector() : KlarnaConnector {
     return $this->connector;
+  }
+
+  /**
+   * Gets the logger.
+   *
+   * @return \Psr\Log\LoggerInterface
+   *   The logger.
+   */
+  public function getLogger() : LoggerInterface {
+    return $this->logger;
   }
 
   /**
@@ -162,6 +189,30 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
    */
   public function getPassword() : string {
     return $this->configuration['password'];
+  }
+
+  /**
+   * Gets the return url.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param string $routeName
+   *   The route.
+   * @param array $arguments
+   *   An additional arguments.
+   *
+   * @return string
+   *   The URL.
+   */
+  public function getReturnUri(OrderInterface $order, string $routeName, array $arguments = []) : string {
+    $arguments = array_merge($arguments, [
+      'step' => 'payment',
+      'commerce_order' => $order->id(),
+      'commerce_payment_gateway' => $this->getPluginId(),
+    ]);
+
+    return (new Url($routeName, $arguments, ['absolute' => TRUE]))
+      ->toString();
   }
 
   /**
@@ -212,6 +263,26 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       ],
     ];
 
+    $form['options'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Additional options'),
+      '#open' => FALSE,
+    ];
+
+    foreach ($this->getDefaultOptions() as $key => $title) {
+      $form['options'][$key] = [
+        '#type' => 'textfield',
+        '#title' => $title,
+        '#default_value' => $this->configuration['options'][$key] ?? NULL,
+      ];
+    }
+
+    $form['options']['radius_border'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Border radius'),
+      '#default_value' => $this->configuration['options']['border_radius'] ?? NULL,
+    ];
+
     return $form;
   }
 
@@ -224,7 +295,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
   public function getLocale() : string {
     // @todo Implement this.
     if ($this->configuration['locale'] === 'automatic') {
-      return 'FI';
+      return 'fi-fi';
     }
     return $this->configuration['locale'];
   }
@@ -236,12 +307,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     parent::submitConfigurationForm($form, $form_state);
 
     if (!$form_state->getErrors()) {
-      $values = $form_state->getValue($form['#parents']);
-
-      $this->configuration['mode'] = $values['mode'];
-      $this->configuration['username'] = $values['username'];
-      $this->configuration['password'] = $values['password'];
-      $this->configuration['region'] = $values['region'];
+      $this->configuration = $form_state->getValue($form['#parents']);
     }
   }
 

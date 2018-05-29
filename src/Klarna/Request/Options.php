@@ -14,7 +14,45 @@ class Options implements OptionsInterface {
 
   use ObjectNormalizer;
 
-  protected $data = [];
+  protected $data = [
+    'color_button' => NULL,
+    'color_button_text' => NULL,
+    'color_checkbox' => NULL,
+    'color_checkbox_checkmark' => NULL,
+    'color_header' => NULL,
+    'color_link' => NULL,
+    'color_border' => NULL,
+    'color_border_selected' => NULL,
+    'color_text' => NULL,
+    'color_details' => NULL,
+    'color_text_secondary' => NULL,
+    'radius_border' => NULL,
+  ];
+
+  /**
+   * Constructs a new instance.
+   *
+   * @param array $data
+   *   The data to set.
+   */
+  public function __construct(array $data = []) {
+    foreach ($data as $key => $value) {
+      if (!array_key_exists($key, $this->data)) {
+        throw new \LogicException(sprintf('Trying to set non-existent value(%s).', $key));
+      }
+      $this->data[$key] = $value;
+    }
+  }
+
+  /**
+   * Gets the available options.
+   *
+   * @return array
+   *   The options.
+   */
+  public function getAvailableOptions() : array {
+    return array_keys($this->data);
+  }
 
   /**
    * Asserts that given color is valid hexadecimal color.
@@ -22,7 +60,7 @@ class Options implements OptionsInterface {
    * @param string $color
    *   The color code.
    */
-  protected function assertColor(string $color) : void {
+  public function assertColor(string $color) : void {
     if (!ctype_xdigit($color) || strlen($color) !== 6) {
       throw new \InvalidArgumentException('Color must be valid hexadecimal and exactly 6 characters long.');
     }

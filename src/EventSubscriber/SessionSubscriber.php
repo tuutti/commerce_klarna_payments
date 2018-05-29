@@ -8,6 +8,7 @@ use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\SessionEvent;
 use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilder;
+use Drupal\commerce_order\Entity\OrderInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -21,6 +22,28 @@ final class SessionSubscriber implements EventSubscriberInterface {
     $this->builder = $builder;
   }
 
+  private function buildRequest(OrderInterface $order, string $type) : RequestInterface {
+    $request = $this->builder
+      ->withOrder($order)
+      ->generateRequest($type);
+
+    return $request;
+  }
+
+  /**
+   * Responds to SessionEvent.
+   *
+   * @param \Drupal\commerce_klarna_payments\Event\SessionEvent $event
+   *   The event to respond to.
+   */
+  public function onOrderCreate(SessionEvent $event) {
+    if (!$event->getRequest() instanceof RequestInterface) {
+      $request = $this->buildRequest($event->getOrder(), 'place');
+
+      $event->setRequest($request);
+    }
+  }
+
   /**
    * Responds to SessionEvent.
    *
@@ -28,11 +51,8 @@ final class SessionSubscriber implements EventSubscriberInterface {
    *   The event to respond to.
    */
   public function onSessionCreate(SessionEvent $event) {
-    if ($event->getRequest() instanceof  RequestInterface) {
-      // Build request.
-      $request = $this->builder
-        ->withOrder($event->getOrder())
-        ->generateRequest('create');
+    if (!$event->getRequest() instanceof RequestInterface) {
+      $request = $this->buildRequest($event->getOrder(), 'create');
 
       $event->setRequest($request);
     }
@@ -43,6 +63,7 @@ final class SessionSubscriber implements EventSubscriberInterface {
    */
   public static function getSubscribedEvents() {
     $events[Events::SESSION_CREATE] = ['onSessionCreate'];
+    $events[Events::ORDER_CREATE] = ['onOrderCreate'];
     return $events;
   }
 
