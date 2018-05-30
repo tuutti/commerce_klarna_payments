@@ -8,8 +8,8 @@ use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\SessionEvent;
 use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
 use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
-use Drupal\commerce_klarna_payments\Klarna\Payment\Authorization;
-use Drupal\commerce_klarna_payments\Klarna\Payment\Session;
+use Drupal\commerce_klarna_payments\Klarna\Rest\Authorization;
+use Drupal\commerce_klarna_payments\Klarna\Rest\Session;
 use Drupal\commerce_klarna_payments\Klarna\SessionContainer;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -84,7 +84,7 @@ final class KlarnaConnector {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Payment\Session
+   * @return \Drupal\commerce_klarna_payments\Klarna\Rest\Session
    *   The Klarna session.
    */
   protected function getSession(OrderInterface $order) : Session {
@@ -94,6 +94,19 @@ final class KlarnaConnector {
     return new Session($this->getConnector(), $sessionId);
   }
 
+  /**
+   * Authorizes the order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param string $authorizeToken
+   *   The authorize token.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse
+   *   The authorization response.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Klarna\Exception\FraudException
+   */
   public function authorizeOrder(OrderInterface $order, string $authorizeToken) : AuthorizationResponse {
     /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
     $event = $this->eventDispatcher
@@ -109,7 +122,7 @@ final class KlarnaConnector {
 
     $response = AuthorizationResponse::createFromRequest($authorizer);
 
-    if (!$response->isValid() && !$response->isPending()) {
+    if (!$response->isAccepted() && !$response->isPending()) {
       throw new FraudException('Fraud validation failed.');
     }
     $order->setData('klarna_order_id', $response->getOrderId())

@@ -2,7 +2,13 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Data;
+namespace Drupal\commerce_klarna_payments\Klarna\Data\Payment;
+
+use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\CustomerInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\ObjectInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\UrlsetInterface;
 
 /**
  * An interface to describe requests.
@@ -191,7 +197,7 @@ interface RequestInterface extends ObjectInterface {
   /**
    * Sets the options for this purchase.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\OptionsInterface $options
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface $options
    *   The options.
    *
    * @return $this
@@ -202,7 +208,7 @@ interface RequestInterface extends ObjectInterface {
   /**
    * Sets the attachments.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\AttachmentInterface $attachment
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface $attachment
    *   The attachments.
    *
    * @return $this
@@ -233,7 +239,7 @@ interface RequestInterface extends ObjectInterface {
    * @return $this
    *   The self.
    *
-   * @see \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface::setCustomPaymentMethodIds()
+   * @see \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface::setCustomPaymentMethodIds()
    */
   public function addCustomPaymentMethodId(string $method) : RequestInterface;
 

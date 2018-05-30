@@ -20,6 +20,8 @@ class RedirectController extends ControllerBase {
   /**
    * Validates the authorization and handles the redirects.
    *
+   * @param \Drupal\Core\Routing\RouteMatchInterface $routeMatch
+   *   The route matcher.
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request.
    *
@@ -56,6 +58,7 @@ class RedirectController extends ControllerBase {
 
       $redirect = new TrustedRedirectResponse($response->getRedirectUrl());
 
+      // Send redirect immediately to prevent early rendering.
       return $redirect->send();
     }
     catch (\InvalidArgumentException | ConnectorException $e) {

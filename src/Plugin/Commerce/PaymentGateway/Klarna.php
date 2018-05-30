@@ -20,6 +20,7 @@ use Klarna\Rest\Transport\ConnectorInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Provides the Klarna payments payment gateway.
@@ -309,6 +310,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     if (!$form_state->getErrors()) {
       $this->configuration = $form_state->getValue($form['#parents']);
     }
+  }
+
+  public function onReturn(OrderInterface $order, Request $request) {
   }
 
 }

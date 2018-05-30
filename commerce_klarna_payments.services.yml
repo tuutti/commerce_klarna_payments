@@ -10,5 +10,11 @@ services:
       - { name: event_subscriber }
 
   commerce_klarna_payments.request_builder:
-    class: Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilder
+    class: Drupal\commerce_klarna_payments\Klarna\Service\Payment\RequestBuilder
     arguments: ['@event_dispatcher']
+
+  commerce_klarna_payments.order_transition:
+    class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber
+    arguments: []
+    tags:
+      - { name: event_subscriber }

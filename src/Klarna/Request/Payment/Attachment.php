@@ -2,10 +2,10 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Request;
+namespace Drupal\commerce_klarna_payments\Klarna\Request\Payment;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\AttachmentInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\AttachmentItemInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentItemInterface;
 use Drupal\commerce_klarna_payments\Klarna\ObjectNormalizer;
 
 /**

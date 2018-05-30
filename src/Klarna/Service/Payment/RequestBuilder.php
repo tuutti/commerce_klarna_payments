@@ -2,105 +2,21 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Service;
+namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Request\Address;
 use Drupal\commerce_klarna_payments\Klarna\Request\MerchantUrlset;
 use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
-use Drupal\commerce_klarna_payments\Klarna\Request\Request;
-use Drupal\commerce_klarna_payments\OptionsHelper;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
-use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request;
+use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
 use Drupal\commerce_price\Calculator;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Provides a request builder.
  */
-class RequestBuilder {
-
-  use OptionsHelper;
-
-  /**
-   * The event dispatcher.
-   *
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
-   */
-  protected $eventDispatcher;
-
-  /**
-   * The order.
-   *
-   * @var \Drupal\commerce_order\Entity\OrderInterface
-   */
-  protected $order;
-
-  /**
-   * The payment gateway plugin.
-   *
-   * @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   */
-  protected $plugin;
-
-  /**
-   * Constructs a new instance.
-   *
-   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
-   *   The event dispatcher.
-   */
-  public function __construct(EventDispatcherInterface $eventDispatcher) {
-    $this->eventDispatcher = $eventDispatcher;
-  }
-
-  /**
-   * Gets the payment plugin for order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   *   The payment plugin.
-   */
-  protected function getPaymentPlugin(OrderInterface $order) : Klarna {
-    /** @var \Drupal\commerce_payment\Entity\PaymentGatewayInterface $entity */
-    $entity = $order->payment_gateway->entity;
-
-    return $entity->getPlugin();
-  }
-
-  /**
-   * Populates the order and plugin.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return $this
-   *   The self.
-   */
-  public function setOrder(OrderInterface $order) : self {
-    $this->order = $order;
-    $this->plugin = $this->getPaymentPlugin($order);
-
-    return $this;
-  }
-
-  /**
-   * Constructs a new instance with order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return $this
-   *   The self.
-   */
-  public function withOrder(OrderInterface $order) : self {
-    $instance = clone $this;
-    $instance->setOrder($order);
-
-    return $instance;
-  }
+class RequestBuilder extends RequestBuilderBase {
 
   /**
    * Populates request object for given type.
@@ -108,7 +24,7 @@ class RequestBuilder {
    * @param string $type
    *   The request type.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
    *   The request.
    */
   public function generateRequest(string $type) : RequestInterface {
@@ -129,7 +45,7 @@ class RequestBuilder {
    * @todo Figure out how to deal with minor units.
    * @todo Support shipping fees.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
    *   The request.
    */
   protected function createUpdateRequest() : RequestInterface {
@@ -146,6 +62,7 @@ class RequestBuilder {
           'notification' => $this->plugin->getReturnUri($this->order, 'commerce_payment.notify', [
             'step' => 'complete',
           ]),
+          // @todo Implement?
           // 'push' => 'test',
         ])
       )
@@ -243,7 +160,7 @@ class RequestBuilder {
   /**
    * Getnerates place order request object.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
    *   The request.
    */
   protected function createPlaceRequest() : RequestInterface {
@@ -264,7 +181,7 @@ class RequestBuilder {
   /**
    * Validates the requests.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface $request
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
    *   The request.
    * @param array $required
    *   Required fields.

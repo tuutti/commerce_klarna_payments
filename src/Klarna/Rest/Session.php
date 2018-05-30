@@ -2,7 +2,7 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Payment;
+namespace Drupal\commerce_klarna_payments\Klarna\Rest;
 
 use Klarna\Rest\Resource;
 use Klarna\Rest\Transport\Connector;

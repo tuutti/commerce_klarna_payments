@@ -2,9 +2,9 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Request;
+namespace Drupal\commerce_klarna_payments\Klarna\Request\Payment;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\OptionsInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface;
 use Drupal\commerce_klarna_payments\Klarna\ObjectNormalizer;
 
 /**

@@ -2,15 +2,15 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Request;
+namespace Drupal\commerce_klarna_payments\Klarna\Request\Payment;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\AttachmentInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\CustomerInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\ObjectInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\OptionsInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\UrlsetInterface;
 use Webmozart\Assert\Assert;
 
