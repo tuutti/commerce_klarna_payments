@@ -6,7 +6,6 @@ namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_klarna_payments\KlarnaConnector;
 use Drupal\commerce_klarna_payments\OptionsHelper;
-use Drupal\commerce_klarna_payments\PluginConfigHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
@@ -85,7 +84,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
     EventDispatcherInterface $eventDispatcher,
-    LoggerInterface $logger
+    LoggerInterface $logger,
+    KlarnaConnector $connector
   ) {
     parent::__construct(
       $configuration,
@@ -98,7 +98,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     );
 
     $this->eventDispatcher = $eventDispatcher;
-    $this->connector = new KlarnaConnector($eventDispatcher, $this);
+    $this->connector = $connector;
     $this->logger = $logger;
   }
 
@@ -115,7 +115,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
       $container->get('event_dispatcher'),
-      $container->get('logger.channel.commerce_klarna_payments')
+      $container->get('logger.channel.commerce_klarna_payments'),
+      $container->get('commerce_klarna_payments.connector')
     );
   }
 

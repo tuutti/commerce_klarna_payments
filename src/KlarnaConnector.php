@@ -23,13 +23,6 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 final class KlarnaConnector {
 
   /**
-   * The payment plugin.
-   *
-   * @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   */
-  protected $plugin;
-
-  /**
    * The event dispatcher.
    *
    * @var \Symfony\Component\EventDispatcher\EventSubscriberInterface
@@ -48,30 +41,30 @@ final class KlarnaConnector {
    *
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
    *   The event dispatcher.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The payment plugin.
    * @param \Klarna\Rest\Transport\Connector|null $connector
    *   The connector.
    */
-  public function __construct(EventDispatcherInterface $eventDispatcher, Klarna $plugin, Connector $connector = NULL) {
+  public function __construct(EventDispatcherInterface $eventDispatcher, Connector $connector = NULL) {
     $this->eventDispatcher = $eventDispatcher;
-    $this->plugin = $plugin;
     $this->connector = $connector;
   }
 
   /**
    * Gets the connector.
    *
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The plugin.
+   *
    * @return \Klarna\Rest\Transport\Connector
    *   The connector.
    */
-  protected function getConnector() : Connector {
+  protected function getConnector(Klarna $plugin) : Connector {
     if (!$this->connector) {
       // Populate default connector.
       $this->connector = Connector::create(
-        $this->plugin->getUsername(),
-        $this->plugin->getPassword(),
-        $this->plugin->getApiUri()
+        $plugin->getUsername(),
+        $plugin->getPassword(),
+        $plugin->getApiUri()
       );
     }
     return $this->connector;
@@ -82,15 +75,17 @@ final class KlarnaConnector {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The plugin.
    *
    * @return \Drupal\commerce_klarna_payments\Klarna\Rest\Session
    *   The Klarna session.
    */
-  protected function getSession(OrderInterface $order) : Session {
+  protected function getSession(OrderInterface $order, Klarna $plugin) : Session {
     // Attempt to use already stored session id.
     $sessionId = $order->getData('klarna_session_id', NULL);
 
-    return new Session($this->getConnector(), $sessionId);
+    return new Session($this->getConnector($plugin), $sessionId);
   }
 
   /**
@@ -98,6 +93,8 @@ final class KlarnaConnector {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The klarna plugin.
    * @param string $authorizeToken
    *   The authorize token.
    *
@@ -106,13 +103,13 @@ final class KlarnaConnector {
    *
    * @throws \Drupal\commerce_klarna_payments\Klarna\Exception\FraudException
    */
-  public function authorizeOrder(OrderInterface $order, string $authorizeToken) : AuthorizationResponse {
+  public function authorizeOrder(OrderInterface $order, Klarna $plugin, string $authorizeToken) : AuthorizationResponse {
     /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
     $event = $this->eventDispatcher
       ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
     $build = $event->getRequest()->toArray();
 
-    $authorizer = new Authorization($this->getConnector(), $authorizeToken);
+    $authorizer = new Authorization($this->getConnector($plugin), $authorizeToken);
     $authorizer->create($build);
 
     if (!isset($authorizer['fraud_status'], $authorizer['redirect_url'], $authorizer['order_id'])) {
@@ -135,17 +132,19 @@ final class KlarnaConnector {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The klarna plugin.
    *
    * @return array
    *   The Klarna request data.
    */
-  public function buildTransaction(OrderInterface $order) : array {
+  public function buildTransaction(OrderInterface $order, Klarna $plugin) : array {
     /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
     $event = $this->eventDispatcher
       ->dispatch(Events::SESSION_CREATE, new SessionEvent($order));
     $build = $event->getRequest()->toArray();
 
-    $session = $this->getSession($order);
+    $session = $this->getSession($order, $plugin);
 
     // Create new session if one doesn't exist already.
     if (!isset($session['session_id'])) {
