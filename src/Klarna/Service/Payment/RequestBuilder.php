@@ -90,8 +90,12 @@ class RequestBuilder extends RequestBuilderBase {
         $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
         // Calculate order's total tax.
         $totalTax += $tax;
+
+        if (!$percentage = $adjustment->getPercentage()) {
+          $percentage = '0';
+        }
         // Multiply tax rate to have two implicit decimals, 2500 = 25%.
-        $orderItem->setTaxRate((int) Calculator::multiply($adjustment->getPercentage(), '10000'))
+        $orderItem->setTaxRate((int) Calculator::multiply($percentage, '10000'))
           // Calculate total tax for order item.
           ->setTotalTaxAmount((int) ($tax * $item->getQuantity()));
       }

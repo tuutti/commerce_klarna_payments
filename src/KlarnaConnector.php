@@ -10,7 +10,6 @@ use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
 use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
 use Drupal\commerce_klarna_payments\Klarna\Rest\Authorization;
 use Drupal\commerce_klarna_payments\Klarna\Rest\Session;
-use Drupal\commerce_klarna_payments\Klarna\SessionContainer;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use GuzzleHttp\Exception\ClientException;
