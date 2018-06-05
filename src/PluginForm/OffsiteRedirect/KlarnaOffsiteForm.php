@@ -59,7 +59,10 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     try {
       $form['#attached']['library'][] = 'commerce_klarna_payments/klarna-js-sdk';
 
-      $form['#attached']['drupalSettings']['klarnaPayments'] = $plugin->getKlarnaConnector()->buildTransaction($order, $plugin);
+      $request = $plugin->getKlarnaConnector()->sessionRequest($order);
+
+      $form['#attached']['drupalSettings']['klarnaPayments'] = $plugin->getKlarnaConnector()
+        ->buildTransaction($request, $order, $plugin);
 
       $form['klarna-payments-container'] = [
         '#type' => 'html_tag',

@@ -53,8 +53,9 @@ class RedirectController extends ControllerBase {
     }
 
     try {
+      $request = $plugin->getKlarnaConnector()->authorizeRequest($order);
       $response = $plugin->getKlarnaConnector()
-        ->authorizeOrder($order, $plugin, $values['klarna_authorization_token']);
+        ->authorizeOrder($request, $order, $plugin, $values['klarna_authorization_token']);
 
       $redirect = new TrustedRedirectResponse($response->getRedirectUrl());
 

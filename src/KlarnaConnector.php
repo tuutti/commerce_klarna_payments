@@ -7,6 +7,7 @@ namespace Drupal\commerce_klarna_payments;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\SessionEvent;
 use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
 use Drupal\commerce_klarna_payments\Klarna\Rest\Authorization;
 use Drupal\commerce_klarna_payments\Klarna\Rest\Session;
@@ -89,8 +90,27 @@ final class KlarnaConnector {
   }
 
   /**
+   * Gets the authorize request.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
+   *   The request.
+   */
+  public function authorizeRequest(OrderInterface $order) : RequestInterface {
+    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
+    $event = $this->eventDispatcher
+      ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
+
+    return $event->getRequest();
+  }
+
+  /**
    * Authorizes the order.
    *
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
+   *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
@@ -103,11 +123,8 @@ final class KlarnaConnector {
    *
    * @throws \Drupal\commerce_klarna_payments\Klarna\Exception\FraudException
    */
-  public function authorizeOrder(OrderInterface $order, Klarna $plugin, string $authorizeToken) : AuthorizationResponse {
-    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
-    $event = $this->eventDispatcher
-      ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
-    $build = $event->getRequest()->toArray();
+  public function authorizeOrder(RequestInterface $request, OrderInterface $order, Klarna $plugin, string $authorizeToken) : AuthorizationResponse {
+    $build = $request->toArray();
 
     $authorizer = new Authorization($this->getConnector($plugin), $authorizeToken);
     $authorizer->create($build);
@@ -128,8 +145,27 @@ final class KlarnaConnector {
   }
 
   /**
+   * Gets the session request.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
+   *   The request.
+   */
+  public function sessionRequest(OrderInterface $order) : RequestInterface {
+    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
+    $event = $this->eventDispatcher
+      ->dispatch(Events::SESSION_CREATE, new SessionEvent($order));
+
+    return $event->getRequest();
+  }
+
+  /**
    * Builds a new order transaction.
    *
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
+   *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
@@ -138,11 +174,8 @@ final class KlarnaConnector {
    * @return array
    *   The Klarna request data.
    */
-  public function buildTransaction(OrderInterface $order, Klarna $plugin) : array {
-    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
-    $event = $this->eventDispatcher
-      ->dispatch(Events::SESSION_CREATE, new SessionEvent($order));
-    $build = $event->getRequest()->toArray();
+  public function buildTransaction(RequestInterface $request, OrderInterface $order, Klarna $plugin) : array {
+    $build = $request->toArray();
 
     $session = $this->getSession($order, $plugin);
 
