@@ -7,6 +7,7 @@ namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 use Drupal\commerce_klarna_payments\KlarnaConnector;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
@@ -20,6 +21,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Webmozart\Assert\Assert;
 
 /**
  * Provides the Klarna payments payment gateway.
@@ -313,7 +315,35 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     }
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function onReturn(OrderInterface $order, Request $request) {
+    $klarnaOrder = $this->connector->getOrder($order, $this);
+
+    try {
+      Assert::oneOf($klarnaOrder['status'], [
+        'AUTHORIZED',
+        'PART_CAPTURED',
+        'CAPTURED',
+      ]);
+    }
+    catch (\InvalidArgumentException $e) {
+      throw new PaymentGatewayException($this->t('Order is in invalid state [@state]', [
+        '@state' => $klarnaOrder['status'],
+      ]));
+    }
+    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+
+    /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+    $payment = $payment_storage->create([
+      'amount' => $order->getTotalPrice(),
+      'payment_gateway' => $this->entityId,
+      'order_id' => $order->id(),
+      'test' => $this->getMode() == 'test',
+    ]);
+    $payment->setAuthorizedTime($this->time->getRequestTime())
+      ->save();
   }
 
 }

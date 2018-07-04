@@ -14,6 +14,7 @@ use Drupal\commerce_klarna_payments\Klarna\Rest\Session;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use GuzzleHttp\Exception\ClientException;
+use Klarna\Rest\OrderManagement\Order;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -104,6 +105,27 @@ final class KlarnaConnector {
       ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
 
     return $event->getRequest();
+  }
+
+  /**
+   * Gets the Klarna order for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The klarna plugin.
+   *
+   * @return \Klarna\Rest\OrderManagement\Order
+   *   The klarna order.
+   */
+  public function getOrder(OrderInterface $order, Klarna $plugin) : Order {
+    if (!$orderId = $order->getData('klarna_order_id')) {
+      throw new \InvalidArgumentException('Klarna order ID is not set.');
+    }
+    $order = new Order($this->getConnector($plugin), $orderId);
+    $order->fetch();
+
+    return $order;
   }
 
   /**
