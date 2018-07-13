@@ -8,6 +8,9 @@
     </li>
   </ul>
   <script>
+    var self = this
+    var authorizationAttempted = false
+
     selectMethod = function(event) {
       var item = event.item.item
       // Deselect previous items.
@@ -17,12 +20,12 @@
       })
       // Mark current as selected.
       item.selected = true
-      this.parent.update()
+      self.update()
 
       opts.load(item.identifier, {}, function (response) {
         item.done = true
         opts.selectedPaymentMethod = item.identifier
-        this.parent.update()
+        self.update()
       })
     }.bind(this)
 
@@ -39,11 +42,25 @@
       if (!opts.selectedPaymentMethod) {
         return;
       }
-      opts.authorize(opts.selectedPaymentMethod, function (response) {
-        if (response.approved && response.show_form) {
-          observer.trigger('success', response, event.target)
-        }
-      })
+      if (!authorizationAttempted) {
+        opts.authorize(opts.selectedPaymentMethod, function (response) {
+          if (response.approved && response.show_form) {
+            // @todo Figure out what to do if validation fails.
+            observer.trigger('success', response, event.target)
+          }
+          // Indicate that we have attempted to authorize the order
+          // and all further calls should use reauthorize callback
+          // rather than this.
+          authorizationAttempted = true
+        })
+      }
+      else {
+        opts.reauthorize(opts.selectedPaymentMethod, function (response) {
+          if (response.approved && response.show_form) {
+            observer.trigger('success', response, event.target)
+          }
+        })
+      }
     }.bind(this)
 
     var ValidationObserver = function() {

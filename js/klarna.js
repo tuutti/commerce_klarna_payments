@@ -51,6 +51,18 @@
       }
     },
 
+    reauthorize: function(method, data, callback) {
+      Klarna.Payments.reauthorize({
+          payment_method_category: method,
+        },
+        data,
+        function (response) {
+          if (callback) {
+            return callback(response);
+          }
+        });
+    },
+
     authorize: function(method, data, callback) {
       Klarna.Payments.authorize({
         payment_method_category: method,
