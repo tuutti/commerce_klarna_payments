@@ -5,14 +5,20 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface as RequestInterfaceBase;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Request\Address;
 use Drupal\commerce_klarna_payments\Klarna\Request\MerchantUrlset;
+use Drupal\commerce_klarna_payments\Klarna\Request\Order\CaptureRequest;
 use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
 use Drupal\commerce_klarna_payments\Klarna\Request\Payment\AuthorizationRequest;
 use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
+use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_order\Entity\OrderItemInterface as CommerceOrderItemInterface;
 use Drupal\commerce_price\Calculator;
 
 /**
@@ -26,10 +32,10 @@ class RequestBuilder extends RequestBuilderBase {
    * @param string $type
    *   The request type.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
    *   The request.
    */
-  public function generateRequest(string $type) : RequestInterface {
+  public function generateRequest(string $type) : RequestInterfaceBase {
     switch ($type) {
       case 'create':
       case 'update':
@@ -37,8 +43,34 @@ class RequestBuilder extends RequestBuilderBase {
 
       case 'place':
         return $this->createPlaceRequest(new AuthorizationRequest());
+
+      case 'capture':
+        return $this->createCaptureRequest(new CaptureRequest());
     }
     throw new \LogicException('Invalid type.');
+  }
+
+  /**
+   * Creates capture request object.
+   *
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface $request
+   *   The request.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface
+   *   The capture request.
+   */
+  protected function createCaptureRequest(CreateCaptureInterface $request) : CreateCaptureInterface {
+    $totalPrice = $this->order->getTotalPrice();
+
+    $request->setCapturedAmount((int) $totalPrice->multiply('100')->getNumber());
+
+    foreach ($this->order->getItems() as $item) {
+      $orderItem = $this->createOrderLine($item);
+
+      $request->addOrderItem($orderItem);
+    }
+
+    return $request;
   }
 
   /**
@@ -79,36 +111,52 @@ class RequestBuilder extends RequestBuilderBase {
     $totalTax = 0;
 
     foreach ($this->order->getItems() as $item) {
-      $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
-
-      $orderItem = (new OrderItem())
-        ->setName($item->getTitle())
-        ->setQuantity((int) $item->getQuantity())
-        ->setUnitPrice($unitPrice)
-        ->setTotalAmount((int) ($unitPrice * $item->getQuantity()));
-
-      foreach ($item->getAdjustments() as $adjustment) {
-        // Only tax adjustments are supported by default.
-        if ($adjustment->getType() !== 'tax') {
-          continue;
-        }
-        $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
-        // Calculate order's total tax.
-        $totalTax += $tax;
-
-        if (!$percentage = $adjustment->getPercentage()) {
-          $percentage = '0';
-        }
-        // Multiply tax rate to have two implicit decimals, 2500 = 25%.
-        $orderItem->setTaxRate((int) Calculator::multiply($percentage, '10000'))
-          // Calculate total tax for order item.
-          ->setTotalTaxAmount((int) ($tax * $item->getQuantity()));
-      }
+      $orderItem = $this->createOrderLine($item);
       $request->addOrderItem($orderItem);
+
+      // Calculate total tax amount.
+      $totalTax += $orderItem->toArray()['total_tax_amount'];
     }
     $request->setOrderTaxAmount($totalTax);
 
     return $request;
+  }
+
+  /**
+   * Creates new order line.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
+   *   The order item to create order line from.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface
+   *   The order line item.
+   */
+  protected function createOrderLine(CommerceOrderItemInterface $item) : OrderItemInterface {
+    $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
+
+    $orderItem = (new OrderItem())
+      ->setName($item->getTitle())
+      ->setQuantity((int) $item->getQuantity())
+      ->setUnitPrice($unitPrice)
+      ->setTotalAmount((int) ($unitPrice * $item->getQuantity()));
+
+    foreach ($item->getAdjustments() as $adjustment) {
+      // Only tax adjustments are supported by default.
+      if ($adjustment->getType() !== 'tax') {
+        continue;
+      }
+      $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
+
+      if (!$percentage = $adjustment->getPercentage()) {
+        $percentage = '0';
+      }
+      // Multiply tax rate to have two implicit decimals, 2500 = 25%.
+      $orderItem->setTaxRate((int) Calculator::multiply($percentage, '10000'))
+        // Calculate total tax for order item.
+        ->setTotalTaxAmount((int) ($tax * $item->getQuantity()));
+    }
+
+    return $orderItem;
   }
 
   /**

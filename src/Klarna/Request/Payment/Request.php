@@ -7,17 +7,17 @@ namespace Drupal\commerce_klarna_payments\Klarna\Request\Payment;
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\CustomerInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\ObjectInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\UrlsetInterface;
+use Drupal\commerce_klarna_payments\Klarna\RequestBase;
 use Webmozart\Assert\Assert;
 
 /**
  * Value object for making requests.
  */
-class Request implements RequestInterface {
+class Request extends RequestBase implements RequestInterface {
 
   protected $localeMapping = [
     'sv-se' => 'SE',
@@ -29,13 +29,6 @@ class Request implements RequestInterface {
     'en-us' => 'US',
     'en-gb' => 'GB',
   ];
-
-  /**
-   * The container for data used in request.
-   *
-   * @var array
-   */
-  protected $data = [];
 
   /**
    * {@inheritdoc}
@@ -195,36 +188,6 @@ class Request implements RequestInterface {
   public function addCustomPaymentMethodId(string $method) : RequestInterface {
     $this->data['custom_payment_method_ids'][] = $method;
     return $this;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function toArray() : array {
-    $data = [];
-    foreach ($this->data as $key => $value) {
-      $normalized = $value;
-
-      if ($value instanceof ObjectInterface) {
-        // Normalize object values.
-        $normalized = $value->toArray();
-      }
-
-      // Handle multivalue fields.
-      if (is_array($value)) {
-        $normalized = [];
-        foreach ($value as $k => $v) {
-          $normalized[] = $v->toArray();
-        }
-      }
-      // Convert empty arrays to NULL.
-      if (is_array($normalized) && !$normalized) {
-        $normalized = NULL;
-      }
-      $data[$key] = $normalized;
-    }
-
-    return $data;
   }
 
 }

@@ -4,7 +4,7 @@ services:
     arguments: ['commerce_klarna_payments']
 
   commerce_klarna_payments.session_subscriber:
-    class: Drupal\commerce_klarna_payments\EventSubscriber\SessionSubscriber
+    class: Drupal\commerce_klarna_payments\EventSubscriber\RequestSubscriber
     arguments: ['@commerce_klarna_payments.request_builder']
     tags:
       - { name: event_subscriber }
@@ -19,6 +19,6 @@ services:
 
   commerce_klarna_payments.order_transition:
     class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber
-    arguments: []
+    arguments: ['@commerce_klarna_payments.connector', '@logger.channel.commerce_klarna_payments', '@event_dispatcher', '@entity_type.manager']
     tags:
       - { name: event_subscriber }

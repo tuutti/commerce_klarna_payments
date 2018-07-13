@@ -196,6 +196,16 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
   }
 
   /**
+   * Gets the entity id (plugin id).
+   *
+   * @return string
+   *   The entity id.
+   */
+  public function getEntityId() : string {
+    return $this->entityId;
+  }
+
+  /**
    * Gets the return url.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -313,7 +323,12 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
    * {@inheritdoc}
    */
   public function onReturn(OrderInterface $order, Request $request) {
-    $klarnaOrder = $this->connector->getOrder($order, $this);
+    try {
+      $klarnaOrder = $this->connector->getOrder($order);
+    }
+    catch (\Exception $e) {
+      throw new PaymentGatewayException();
+    }
 
     try {
       Assert::oneOf($klarnaOrder['status'], [
@@ -338,6 +353,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     ]);
     $payment->setAuthorizedTime($this->time->getRequestTime())
       ->save();
+
+    $klarnaOrder->acknowledge();
   }
 
 }

@@ -60,7 +60,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     try {
       $request = $plugin->getKlarnaConnector()->sessionRequest($order);
       $data = $plugin->getKlarnaConnector()
-        ->buildTransaction($request, $order, $plugin);
+        ->buildTransaction($request, $order);
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
@@ -77,6 +77,14 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
         '#value' => '',
         '#attributes' => ['data-klarna-selector' => 'authorization-token'],
       ];
+
+      if (empty($data['payment_method_categories'])) {
+        $this->messenger()->addError(
+          $this->t('No payment method categories found. Usually this means that Klarna is not supported in the given country. Please contact store administration if you think this is an error.')
+        );
+        // Trigger a form error so we can disable continue button.
+        $form_state->setErrorByName('klarna_authorization_token');
+      }
 
       return $form;
     }
@@ -135,6 +143,10 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     foreach (Element::children($complete_form['actions']) as $name) {
       if ($complete_form['actions'][$name]['#type'] !== 'submit') {
         continue;
+      }
+      if ($form_state->getErrors()) {
+        // Disable continue button if form has errors.
+        $complete_form['actions'][$name]['#attributes']['disabled'] = 'disabled';
       }
       // Append appropriate selector so we can disable the submit button until
       // we have authorization token.

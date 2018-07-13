@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types = 1);
+
 namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce\Response\NeedsRedirectException;
@@ -86,7 +88,7 @@ class RedirectController implements ContainerInjectionInterface {
     try {
       $request = $plugin->getKlarnaConnector()->authorizeRequest($commerce_order);
       $response = $plugin->getKlarnaConnector()
-        ->authorizeOrder($request, $commerce_order, $plugin, $values['klarna_authorization_token']);
+        ->authorizeOrder($request, $commerce_order, $values['klarna_authorization_token']);
 
       throw new NeedsRedirectException($response->getRedirectUrl());
     }

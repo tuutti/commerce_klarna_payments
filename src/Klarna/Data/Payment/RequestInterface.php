@@ -8,12 +8,13 @@ use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\CustomerInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\ObjectInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface as RequestInterfaceBase;
 use Drupal\commerce_klarna_payments\Klarna\Data\UrlsetInterface;
 
 /**
  * An interface to describe requests.
  */
-interface RequestInterface extends ObjectInterface {
+interface RequestInterface extends ObjectInterface, RequestInterfaceBase {
 
   /**
    * Sets the design.

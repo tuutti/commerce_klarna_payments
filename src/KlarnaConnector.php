@@ -5,7 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments;
 
 use Drupal\commerce_klarna_payments\Event\Events;
-use Drupal\commerce_klarna_payments\Event\SessionEvent;
+use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
@@ -77,13 +77,12 @@ final class KlarnaConnector {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The plugin.
    *
    * @return \Drupal\commerce_klarna_payments\Klarna\Rest\Session
    *   The Klarna session.
    */
-  protected function getSession(OrderInterface $order, Klarna $plugin) : Session {
+  protected function getSession(OrderInterface $order) : Session {
+    $plugin = $this->getPlugin($order);
     // Attempt to use already stored session id.
     $sessionId = $order->getData('klarna_session_id', NULL);
 
@@ -100,11 +99,29 @@ final class KlarnaConnector {
    *   The request.
    */
   public function authorizeRequest(OrderInterface $order) : RequestInterface {
-    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
+    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $event */
     $event = $this->eventDispatcher
-      ->dispatch(Events::ORDER_CREATE, new SessionEvent($order));
+      ->dispatch(Events::ORDER_CREATE, new RequestEvent($order));
 
     return $event->getRequest();
+  }
+
+  /**
+   * Gets the plugin for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
+   *   The payment plugin.
+   */
+  public function getPlugin(OrderInterface $order) : Klarna {
+    $gateway = $order->get('payment_gateway');
+
+    if ($gateway->isEmpty()) {
+      throw new \InvalidArgumentException('Payment gateway not found.');
+    }
+    return $gateway->first()->entity->getPlugin();
   }
 
   /**
@@ -114,18 +131,28 @@ final class KlarnaConnector {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The klarna plugin.
    *
    * @return \Klarna\Rest\OrderManagement\Order
    *   The klarna order.
    */
-  public function getOrder(OrderInterface $order, Klarna $plugin) : Order {
+  public function getOrder(OrderInterface $order) : Order {
+    $plugin = $this->getPlugin($order);
+
     if (!$orderId = $order->getData('klarna_order_id')) {
       throw new \InvalidArgumentException('Klarna order ID is not set.');
     }
-    $order = new Order($this->getConnector($plugin), $orderId);
-    $order->fetch();
+
+    try {
+      $order = new Order($this->getConnector($plugin), $orderId);
+      $order->fetch();
+
+      if (!isset($order['status'])) {
+        throw new \InvalidArgumentException('Order status not found.');
+      }
+    }
+    catch (ConnectorException $e) {
+      throw new \InvalidArgumentException($e->getMessage());
+    }
 
     return $order;
   }
@@ -137,8 +164,6 @@ final class KlarnaConnector {
    *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The klarna plugin.
    * @param string $authorizeToken
    *   The authorize token.
    *
@@ -147,9 +172,10 @@ final class KlarnaConnector {
    *
    * @throws \Drupal\commerce_klarna_payments\Klarna\Exception\FraudException
    */
-  public function authorizeOrder(RequestInterface $request, OrderInterface $order, Klarna $plugin, string $authorizeToken) : AuthorizationResponse {
+  public function authorizeOrder(RequestInterface $request, OrderInterface $order, string $authorizeToken) : AuthorizationResponse {
     $build = $request->toArray();
 
+    $plugin = $this->getPlugin($order);
     $authorizer = new Authorization($this->getConnector($plugin), $authorizeToken);
     $authorizer->create($build);
 
@@ -178,9 +204,9 @@ final class KlarnaConnector {
    *   The request.
    */
   public function sessionRequest(OrderInterface $order) : RequestInterface {
-    /** @var \Drupal\commerce_klarna_payments\Event\SessionEvent $event */
+    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $event */
     $event = $this->eventDispatcher
-      ->dispatch(Events::SESSION_CREATE, new SessionEvent($order));
+      ->dispatch(Events::SESSION_CREATE, new RequestEvent($order));
 
     return $event->getRequest();
   }
@@ -194,16 +220,14 @@ final class KlarnaConnector {
    *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The klarna plugin.
    *
    * @return array
    *   The Klarna request data.
    */
-  public function buildTransaction(RequestInterface $request, OrderInterface $order, Klarna $plugin) : array {
+  public function buildTransaction(RequestInterface $request, OrderInterface $order) : array {
     $build = $request->toArray();
 
-    $session = $this->getSession($order, $plugin);
+    $session = $this->getSession($order);
 
     // Create new session if one doesn't exist already.
     if (!isset($session['session_id'])) {
@@ -229,7 +253,7 @@ final class KlarnaConnector {
     }
     return $build + [
       'client_token' => $session['client_token'],
-      'payment_method_categories' => $session['payment_method_categories'],
+      'payment_method_categories' => $session['payment_method_categories'] ?? [],
     ];
   }
 

@@ -23,4 +23,11 @@ final class Events {
    */
   public const ORDER_CREATE = 'commerce_klarna_payments.order_create';
 
+  /**
+   * An event to alter values before creating a payment capture.
+   *
+   * @var string
+   */
+  public const CAPTURE_CREATE = 'commerce_klarna_payments.capture_create';
+
 }
