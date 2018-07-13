@@ -121,7 +121,12 @@ final class KlarnaConnector {
     if ($gateway->isEmpty()) {
       throw new \InvalidArgumentException('Payment gateway not found.');
     }
-    return $gateway->first()->entity->getPlugin();
+    $plugin = $gateway->first()->entity->getPlugin();
+
+    if (!$plugin instanceof Klarna) {
+      throw new \InvalidArgumentException('Payment gateway not instanceof Klarna.');
+    }
+    return $plugin;
   }
 
   /**

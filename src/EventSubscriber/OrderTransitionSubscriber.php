@@ -105,6 +105,13 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
+      $this->connector->getPlugin($order);
+    }
+    catch (\InvalidArgumentException $e) {
+      // Non-klarna order.
+      return;
+    }
+    try {
       $klarnaOrder = $this->connector->getOrder($order);
 
       /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
