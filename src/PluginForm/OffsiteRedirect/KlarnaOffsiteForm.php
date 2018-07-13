@@ -9,6 +9,7 @@ use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Messenger\MessengerTrait;
+use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Exception;
 use Klarna\Rest\Transport\Exception\ConnectorException;
@@ -57,25 +58,24 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     $form = $this->buildRedirectForm($form, $form_state, $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect'));
 
     try {
-      $form['#attached']['library'][] = 'commerce_klarna_payments/klarna-js-sdk';
-
       $request = $plugin->getKlarnaConnector()->sessionRequest($order);
-
-      $form['#attached']['drupalSettings']['klarnaPayments'] = $plugin->getKlarnaConnector()
+      $data = $plugin->getKlarnaConnector()
         ->buildTransaction($request, $order, $plugin);
 
-      $form['klarna-payments-container'] = [
-        '#type' => 'html_tag',
-        '#tag' => 'div',
-        '#attributes' => [
-          'id' => 'klarna-payments-container',
+      $form['payment_methods'] = [
+        '#theme' => 'commerce_klarna_payments_container',
+        '#attached' => [
+          'library' => ['commerce_klarna_payments/klarna-js-sdk'],
+          'drupalSettings' => [
+            'klarnaPayments' => $data,
+          ],
         ],
       ];
 
       $form['klarna_authorization_token'] = [
         '#type' => 'hidden',
         '#value' => '',
-        '#attributes' => ['klarna-selector' => 'authorization-token'],
+        '#attributes' => ['data-klarna-selector' => 'authorization-token'],
       ];
 
       return $form;
@@ -124,6 +124,24 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     ];
 
     return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function processRedirectForm(array $element, FormStateInterface $form_state, array &$complete_form) {
+    $element = parent::processRedirectForm($element, $form_state, $complete_form);
+
+    foreach (Element::children($complete_form['actions']) as $name) {
+      if ($complete_form['actions'][$name]['#type'] !== 'submit') {
+        continue;
+      }
+      // Append appropriate selector so we can disable the submit button until
+      // we have authorization token.
+      $complete_form['actions'][$name]['#attributes']['data-klarna-selector'] = 'submit';
+      $complete_form['actions'][$name]['#value'] = t('Continue');
+    }
+    return $element;
   }
 
 }

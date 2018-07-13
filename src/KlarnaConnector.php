@@ -110,6 +110,8 @@ final class KlarnaConnector {
   /**
    * Gets the Klarna order for given order.
    *
+   * @todo Create response value object.
+   *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
@@ -186,6 +188,8 @@ final class KlarnaConnector {
   /**
    * Builds a new order transaction.
    *
+   * @todo Create response value object.
+   *
    * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
    *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -225,7 +229,7 @@ final class KlarnaConnector {
     }
     return $build + [
       'client_token' => $session['client_token'],
-      'payment_method_category' => reset($session['payment_method_categories']),
+      'payment_method_categories' => $session['payment_method_categories'],
     ];
   }
 

@@ -281,12 +281,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       ];
     }
 
-    $form['options']['radius_border'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Border radius'),
-      '#default_value' => $this->configuration['options']['border_radius'] ?? NULL,
-    ];
-
     return $form;
   }
 

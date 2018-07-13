@@ -21,13 +21,16 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    * This method is called whenever the onOrderPlace event is dispatched.
    */
   public function onOrderPlace(WorkflowTransitionEvent $event) {
+    $x = 1;
   }
 
   /**
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
-    $events['onOrderPlace'] = ['onOrderPlace'];
+    $events = [
+      'commerce_order.place.post_transition' => ['onOrderPlace'],
+    ];
 
     return $events;
   }

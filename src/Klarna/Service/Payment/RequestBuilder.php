@@ -5,10 +5,12 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Request\Address;
 use Drupal\commerce_klarna_payments\Klarna\Request\MerchantUrlset;
 use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
+use Drupal\commerce_klarna_payments\Klarna\Request\Payment\AuthorizationRequest;
 use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
 use Drupal\commerce_price\Calculator;
@@ -31,10 +33,10 @@ class RequestBuilder extends RequestBuilderBase {
     switch ($type) {
       case 'create':
       case 'update':
-        return $this->createUpdateRequest();
+        return $this->createUpdateRequest(new Request());
 
       case 'place':
-        return $this->createPlaceRequest();
+        return $this->createPlaceRequest(new AuthorizationRequest());
     }
     throw new \LogicException('Invalid type.');
   }
@@ -45,13 +47,16 @@ class RequestBuilder extends RequestBuilderBase {
    * @todo Figure out how to deal with minor units.
    * @todo Support shipping fees.
    *
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
+   *   The request.
+   *
    * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
    *   The request.
    */
-  protected function createUpdateRequest() : RequestInterface {
+  protected function createUpdateRequest(RequestInterface $request) : RequestInterface {
     $totalPrice = $this->order->getTotalPrice();
 
-    $request = (new Request())
+    $request
       ->setPurchaseCountry($this->getStoreLanguage())
       ->setPurchaseCurrency($totalPrice->getCurrencyCode())
       ->setLocale($this->plugin->getLocale())
@@ -162,13 +167,16 @@ class RequestBuilder extends RequestBuilderBase {
   }
 
   /**
-   * Getnerates place order request object.
+   * Generates place order request object.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
+   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface $request
+   *   The authorization request.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface
    *   The request.
    */
-  protected function createPlaceRequest() : RequestInterface {
-    $request = $this->createUpdateRequest();
+  protected function createPlaceRequest(AuthorizationRequestInterface $request) : AuthorizationRequestInterface {
+    $request = $this->createUpdateRequest($request);
 
     $this->validate($request, [
       'purchase_country',

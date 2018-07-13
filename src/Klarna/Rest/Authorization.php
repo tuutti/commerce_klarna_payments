@@ -44,6 +44,38 @@ class Authorization extends Resource {
   }
 
   /**
+   * Generates a consumer token.
+   *
+   * @param array $data
+   *   The data.
+   *
+   * @return $this
+   *   The self.
+   */
+  public function createToken(array $data) {
+    $data = $this->post(sprintf('%s/customer-token', $this->getLocation()), $data)
+      ->status('200')
+      ->contentType('application/json')
+      ->getJson();
+    $this->exchangeArray($data);
+
+    return $this;
+  }
+
+  /**
+   * Deletes an existing authorization.
+   *
+   * @return $this
+   *   The self.
+   */
+  public function delete() {
+    $this->request('DELETE', $this->getLocation())
+      ->status('204');
+
+    return $this;
+  }
+
+  /**
    * Creates the order.
    *
    * @param array $data

@@ -3,7 +3,7 @@
  * Klarna payments widget.
  */
 
-(function (window, Drupal, drupalSettings, Klarna) {
+(function (window, Drupal, drupalSettings, $, Klarna) {
 
   'use strict';
 
@@ -16,19 +16,16 @@
    *   Attaches the behavior for the klarna payments.
    */
   Drupal.behaviors.klarnaPayments = {
-    loading: false,
     settings: {},
+    selectedPaymentMethod: null,
 
-    attach: function () {
-      if (this.loading) {
-        return;
-      }
+    attach: function (context) {
       this.initialize(drupalSettings.klarnaPayments);
-      this.load(this.settings.payment_method_category.identifier, 'klarna-payments-container');
+
+      riot.mount('klarna', this);
     },
 
     initialize: function(settings) {
-      this.loading = true;
       this.settings = settings;
 
       Klarna.Payments.init({
@@ -36,20 +33,17 @@
       });
     },
 
-    load: function(payment_method, container, data) {
-      var self = this;
-
+    load: function(method, data, callback) {
       try {
         Klarna.Payments.load({
-            container: '#' + container,
-            payment_method_category: payment_method
+            container: '#klarna-payment-container-' + method,
+            payment_method_category: method
           },
           data,
           function (response) {
-            if (!response.show_form) {
-              throw 'Failed to initialize form.';
+            if (callback) {
+              return callback(response);
             }
-            self.authorize(payment_method);
           });
       }
       catch (e) {
@@ -57,25 +51,17 @@
       }
     },
 
-    authorize: function(payment_method, data) {
+    authorize: function(method, data, callback) {
       Klarna.Payments.authorize({
-        payment_method_category: payment_method
+        payment_method_category: method,
       },
         data,
         function (response) {
-          console.log(response);
-
-          if (response.approved && response.show_form) {
-            var input = document.querySelector('[klarna-selector="authorization-token"]');
-
-            if (typeof input === 'undefined') {
-              throw 'Authorization token input not found';
-            }
-            input.setAttribute('value', response.authorization_token);
+          if (callback) {
+            return callback(response);
           }
         });
-      this.loading = false;
     }
   };
 
-})(window, Drupal, drupalSettings, Klarna);
+})(window, Drupal, drupalSettings, jQuery, Klarna);
