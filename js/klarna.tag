@@ -8,8 +8,6 @@
     </li>
   </ul>
   <script>
-    var self = this
-
     selectMethod = function(event) {
       var item = event.item.item
       // Deselect previous items.
@@ -19,12 +17,12 @@
       })
       // Mark current as selected.
       item.selected = true
-      self.update()
+      this.parent.update()
 
       opts.load(item.identifier, {}, function (response) {
         item.done = true
         opts.selectedPaymentMethod = item.identifier
-        self.update()
+        this.parent.update()
       })
     }.bind(this)
 
