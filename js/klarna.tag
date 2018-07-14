@@ -55,6 +55,8 @@
         })
       }
       else {
+        // @todo Figure out how to deal with re-authorization if Klarna::onReturn()
+        // fails.
         opts.reauthorize(opts.selectedPaymentMethod, function (response) {
           if (response.approved && response.show_form) {
             observer.trigger('success', response, event.target)

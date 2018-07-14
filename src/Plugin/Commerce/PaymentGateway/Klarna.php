@@ -351,6 +351,10 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       'order_id' => $order->id(),
       'test' => $this->getMode() == 'test',
     ]);
+
+    $transition = $payment->getState()->getWorkflow()->getTransition('authorize');
+    $payment->getState()->applyTransition($transition);
+
     $payment->setAuthorizedTime($this->time->getRequestTime())
       ->save();
 

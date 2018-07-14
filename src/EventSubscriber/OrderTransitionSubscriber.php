@@ -95,11 +95,11 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    * @param \Drupal\state_machine\Event\WorkflowTransitionEvent $event
    *   The transition event.
    */
-  public function onOrderPlace(WorkflowTransitionEvent $event) {
+  public function onOrderPlace(WorkflowTransitionEvent $event) : void {
     /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
     $order = $event->getEntity();
 
-    // Trigger only when order is being completed.
+    // This should only be triggered when the order is being completed.
     if ($event->getToState()->getId() !== 'completed') {
       return;
     }
@@ -143,11 +143,12 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
-    $events = [
-      // @todo Make this checkout flow agnostic if possible.
-      'commerce_order.place.post_transition' => ['onOrderPlace'],
-    ];
+    $events = [];
 
+    // Subsribe to every known transition phase that leads to 'completed' state.
+    foreach (['place', 'validate', 'fulfill'] as $transition) {
+      $events[sprintf('commerce_order.%s.post_transition', $transition)] = ['onOrderPlace'];
+    }
     return $events;
   }
 
