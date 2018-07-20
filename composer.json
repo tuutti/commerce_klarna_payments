@@ -12,6 +12,8 @@
   },
   "require": {
     "php": ">=7.1",
-    "klarna/kco_rest": "~3.0"
+    "klarna/kco_rest": "~3.0",
+    "webmozart/assert": "*",
+    "drupal/commerce": "^2"
   }
 }

@@ -1,5 +1,10 @@
 name: Commerce Klarna payments
 type: module
-description: 'Commerce integration for Klarna payments'
 core: 8.x
-package: 'Custom'
+description: Integrates Klarna Payments with Drupal Commerce.
+package: Commerce (contrib)
+dependencies:
+  - commerce:commerce_payment
+  - commerce:commerce_price
+  - system (>=8.5.0)
+
