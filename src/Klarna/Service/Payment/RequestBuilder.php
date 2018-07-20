@@ -17,7 +17,6 @@ use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
 use Drupal\commerce_klarna_payments\Klarna\Request\Payment\AuthorizationRequest;
 use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
-use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface as CommerceOrderItemInterface;
 use Drupal\commerce_price\Calculator;
 

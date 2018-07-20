@@ -131,7 +131,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       'username' => '',
       'password' => '',
       'locale' => 'automatic',
-      'api_url' => NULL,
     ] + parent::defaultConfiguration();
   }
 
