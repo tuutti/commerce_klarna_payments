@@ -14,12 +14,12 @@ php:
   - 7.1
   - 7.2
 
-branches:
-  except:
-    - "7.x-1.x"
-
 matrix:
   fast_finish: true
+
+cache:
+  directories:
+    - $HOME/.composer/cache
 
 env:
   global:
