@@ -3,6 +3,7 @@
 namespace Drupal\Tests\commerce_klarna_payments\Unit;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\ShippingInformationInterface;
 use Drupal\commerce_klarna_payments\Klarna\Request\Order\CaptureRequest;
 use Drupal\Tests\UnitTestCase;
 
@@ -34,6 +35,24 @@ class CaptureRequestTest extends UnitTestCase {
       ->setShippingDelay($expected['shipping_delay']);
 
     $this->assertEquals($expected, $request->toArray());
+  }
+
+  public function testSetShippingInformation() {
+    $info = $this->getMockBuilder(ShippingInformationInterface::class)
+      ->getMock();
+    $info->expects($this->any())
+      ->method('toArray')
+      ->willReturn([
+        'shipping_company' => 'Itella',
+      ]);
+
+    $request = (new CaptureRequest())->setShippingInformation($info);
+
+    $this->assertEquals([
+      'shipping_info' => [
+        'shipping_company' => 'Itella',
+      ],
+    ], $request->toArray());
   }
 
   /**
