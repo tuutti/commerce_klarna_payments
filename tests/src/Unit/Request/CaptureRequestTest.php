@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\commerce_klarna_payments\Unit;
+namespace Drupal\Tests\commerce_klarna_payments\Unit\Request;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\ShippingInformationInterface;
@@ -37,6 +37,9 @@ class CaptureRequestTest extends UnitTestCase {
     $this->assertEquals($expected, $request->toArray());
   }
 
+  /**
+   * @covers ::setShippingInformation
+   */
   public function testSetShippingInformation() {
     $info = $this->getMockBuilder(ShippingInformationInterface::class)
       ->getMock();

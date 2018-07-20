@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\Tests\commerce_klarna_payments\Unit;
+namespace Drupal\Tests\commerce_klarna_payments\Unit\Request;
 
 use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
 use Drupal\Tests\UnitTestCase;

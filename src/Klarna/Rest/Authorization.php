@@ -40,6 +40,7 @@ class Authorization extends Resource {
   public function __construct(Connector $connector, string $authorizationToken) {
     parent::__construct($connector);
 
+    $this[static::ID_FIELD] = $authorizationToken;
     $this->setLocation(sprintf('%s/%s', self::$path, $authorizationToken));
   }
 
