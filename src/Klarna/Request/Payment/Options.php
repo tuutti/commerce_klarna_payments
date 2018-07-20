@@ -33,15 +33,27 @@ class Options implements OptionsInterface {
    * Constructs a new instance.
    *
    * @param array $data
-   *   The data to set.
+   *   The data.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface
+   *   The self.
    */
-  public function __construct(array $data = []) {
-    foreach ($data as $key => $value) {
-      if (!array_key_exists($key, $this->data)) {
-        throw new \LogicException(sprintf('Trying to set non-existent value(%s).', $key));
-      }
-      $this->data[$key] = $value;
-    }
+  public static function create(array $data) : OptionsInterface {
+    $instance = (new self())
+      ->setButtonColor($data['color_button'] ?? '')
+      ->setButtonTextColor($data['color_button_text'] ?? '')
+      ->setCheckBoxColor($data['color_checkbox'] ?? '')
+      ->setCheckBoxCheckMarkColor($data['color_checkbox_checkmark'] ?? '')
+      ->setHeaderColor($data['color_header'] ?? '')
+      ->setLinkColor($data['color_link'] ?? '')
+      ->setBorderColor($data['color_border'] ?? '')
+      ->setSelectedBorderColor($data['color_border_selected'] ?? '')
+      ->setTextColor($data['color_text'] ?? '')
+      ->setDetailsColor($data['color_details'] ?? '')
+      ->setSecondaryTextColor($data['color_text_secondary'] ?? '')
+      ->setBorderRadius($data['radius_border'] ?? '');
+
+    return $instance;
   }
 
   /**
@@ -69,106 +81,108 @@ class Options implements OptionsInterface {
   /**
    * Sets the color.
    *
+   * You can unset colors with empty string.
+   *
    * @param string $color
    *   The color.
    * @param string $type
    *   The type.
+   *
+   * @return $this
+   *   The self.
    */
-  protected function setColor(string $color, string $type) : void {
-    // Remove # if added.
-    $color = ltrim($color, '#');
-    $this->assertColor($color);
+  protected function setColor(string $color, string $type) : OptionsInterface {
+    // Allow empty values.
+    $value = '';
 
-    // Add # back.
-    $this->data[$type] = sprintf('#%s', $color);
+    if (strlen($color) > 0) {
+      // Remove # if added.
+      $color = ltrim($color, '#');
+      $this->assertColor($color);
+
+      // Add # back.
+      $value = sprintf('#%s', $color);
+    }
+    $this->data[$type] = $value;
+
+    return $this;
   }
 
   /**
    * {@inheritdoc}
    */
   public function setButtonColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_button');
-    return $this;
+    return $this->setColor($color, 'color_button');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setButtonTextColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_button_text');
-    return $this;
+    return $this->setColor($color, 'color_button_text');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setCheckBoxColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_checkbox');
-    return $this;
+    return $this->setColor($color, 'color_checkbox');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setCheckBoxCheckMarkColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_checkbox_checkmark');
-    return $this;
+    return $this->setColor($color, 'color_checkbox_checkmark');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setHeaderColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_header');
-    return $this;
+    return $this->setColor($color, 'color_header');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setLinkColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_link');
-    return $this;
+    return $this->setColor($color, 'color_link');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setBorderColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_border');
-    return $this;
+    return $this->setColor($color, 'color_border');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setSelectedBorderColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_border_selected');
-    return $this;
+    return $this->setColor($color, 'color_border_selected');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setTextColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_text');
-    return $this;
+    return $this->setColor($color, 'color_text');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setDetailsColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_details');
-    return $this;
+    return $this->setColor($color, 'color_details');
   }
 
   /**
    * {@inheritdoc}
    */
   public function setSecondaryTextColor(string $color) : OptionsInterface {
-    $this->setColor($color, 'color_text_secondary');
-    return $this;
+    return $this->setColor($color, 'color_text_secondary');
   }
 
   /**

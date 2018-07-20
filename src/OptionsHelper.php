@@ -66,7 +66,7 @@ trait OptionsHelper {
    *   The options.
    */
   protected function getOptions() : OptionsInterface {
-    return new Options($this->getPluginConfiguration()['options']);
+    return Options::create($this->getPluginConfiguration()['options']);
   }
 
 }

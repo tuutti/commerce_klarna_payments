@@ -35,6 +35,13 @@ abstract class RequestBase implements ObjectInterface {
       if (is_array($value)) {
         $normalized = [];
         foreach ($value as $k => $v) {
+          // Some values are just regular arrays that should be sent
+          // just as they are (like custom_payment_method_ids).
+          if (!$v instanceof ObjectInterface) {
+            $normalized[] = $v;
+
+            continue;
+          }
           $normalized[] = $v->toArray();
         }
       }
