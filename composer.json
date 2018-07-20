@@ -11,6 +11,7 @@
     "source": "http://cgit.drupalcode.org/commerce_klarna_payments"
   },
   "require": {
+    "php": ">=7.1",
     "klarna/kco_rest": "~3.0"
   }
 }
