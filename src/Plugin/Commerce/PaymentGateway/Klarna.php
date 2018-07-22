@@ -130,7 +130,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       'mode' => 'test',
       'username' => '',
       'password' => '',
-      'locale' => 'automatic',
+      'options' => [],
     ] + parent::defaultConfiguration();
   }
 
@@ -259,14 +259,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       '#default_value' => $this->configuration['password'],
     ];
 
-    $form['locale'] = [
-      '#title' => $this->t('Locale'),
-      '#type' => 'select',
-      '#options' => [
-        'automatic' => $this->t('Automatic'),
-      ],
-    ];
-
     $form['region'] = [
       '#title' => $this->t('Region'),
       '#type' => 'select',
@@ -291,20 +283,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     }
 
     return $form;
-  }
-
-  /**
-   * Gets the locale.
-   *
-   * @return string
-   *   The locale.
-   */
-  public function getLocale() : string {
-    // @todo Implement this.
-    if ($this->configuration['locale'] === 'automatic') {
-      return 'fi-fi';
-    }
-    return $this->configuration['locale'];
   }
 
   /**

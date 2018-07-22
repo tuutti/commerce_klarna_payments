@@ -77,6 +77,7 @@ class RequestBuilder extends RequestBuilderBase {
    *
    * @todo Figure out how to deal with minor units.
    * @todo Support shipping fees.
+   * @todo Figure out what to do when order is in PENDING state.
    *
    * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
    *   The request.
@@ -90,16 +91,15 @@ class RequestBuilder extends RequestBuilderBase {
     $request
       ->setPurchaseCountry($this->getStoreLanguage())
       ->setPurchaseCurrency($totalPrice->getCurrencyCode())
-      ->setLocale($this->plugin->getLocale())
+      ->setLocale($this->localeResolver->resolve($this->order))
       ->setOrderAmount((int) $totalPrice->multiply('100')->getNumber())
       ->setMerchantUrls(
         new MerchantUrlset([
           'confirmation' => $this->plugin->getReturnUri($this->order, 'commerce_payment.checkout.return'),
+          // @todo Implement this.
           'notification' => $this->plugin->getReturnUri($this->order, 'commerce_payment.notify', [
             'step' => 'complete',
           ]),
-          // @todo Implement?
-          // 'push' => 'test',
         ])
       )
       ->setOptions($this->getOptions());
@@ -107,18 +107,42 @@ class RequestBuilder extends RequestBuilderBase {
     if ($billingAddress = $this->getBillingAddress()) {
       $request->setBillingAddress($billingAddress);
     }
+
     $totalTax = 0;
 
     foreach ($this->order->getItems() as $item) {
       $orderItem = $this->createOrderLine($item);
       $request->addOrderItem($orderItem);
 
-      // Calculate total tax amount.
-      $totalTax += $orderItem->toArray()['total_tax_amount'];
+      // Collect taxes only if enabled.
+      if ($this->hasTaxesIncluded()) {
+        // Calculate total tax amount.
+        $totalTax += $orderItem->toArray()['total_tax_amount'];
+      }
     }
     $request->setOrderTaxAmount($totalTax);
 
     return $request;
+  }
+
+  /**
+   * Checks whether taxes are included in prices or not.
+   *
+   * @return bool
+   *   TRUE if taxes are included, FALSE if not.
+   */
+  protected function hasTaxesIncluded() : bool {
+    static $taxesIncluded;
+
+    if ($taxesIncluded === NULL) {
+      if (!$this->order->getStore()->hasField('prices_include_tax')) {
+        $taxesIncluded = FALSE;
+
+        return FALSE;
+      }
+      $taxesIncluded = (bool) $this->order->getStore()->get('prices_include_tax');
+    }
+    return $taxesIncluded;
   }
 
   /**
@@ -134,7 +158,7 @@ class RequestBuilder extends RequestBuilderBase {
     $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
 
     $orderItem = (new OrderItem())
-      ->setName($item->getTitle())
+      ->setName((string) $item->getTitle())
       ->setQuantity((int) $item->getQuantity())
       ->setUnitPrice($unitPrice)
       ->setTotalAmount((int) ($unitPrice * $item->getQuantity()));
@@ -172,9 +196,11 @@ class RequestBuilder extends RequestBuilderBase {
     $address = $billingData->get('address')->first();
 
     $profile = (new Address())
-      ->setEmail($this->order->getEmail())
-      // Country must be populated if we update billing details.
-      ->setCountry($address->getCountryCode());
+      ->setEmail($this->order->getEmail());
+
+    if ($code = $address->getCountryCode()) {
+      $profile->setCountry($code);
+    }
 
     if ($city = $address->getLocality()) {
       $profile->setCity($city);

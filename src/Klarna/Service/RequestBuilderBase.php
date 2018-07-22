@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Klarna\Service;
 
+use Drupal\commerce_klarna_payments\LocaleResolverInterface;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -38,13 +39,23 @@ abstract class RequestBuilderBase {
   protected $plugin;
 
   /**
+   * The locale resolver.
+   *
+   * @var \Drupal\commerce_klarna_payments\LocaleResolverInterface
+   */
+  protected $localeResolver;
+
+  /**
    * Constructs a new instance.
    *
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
    *   The event dispatcher.
+   * @param \Drupal\commerce_klarna_payments\LocaleResolverInterface $resolver
+   *   The resolver.
    */
-  public function __construct(EventDispatcherInterface $eventDispatcher) {
+  public function __construct(EventDispatcherInterface $eventDispatcher, LocaleResolverInterface $resolver) {
     $this->eventDispatcher = $eventDispatcher;
+    $this->localeResolver = $resolver;
   }
 
   /**

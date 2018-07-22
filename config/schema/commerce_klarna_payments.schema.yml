@@ -7,6 +7,6 @@ commerce_payment.commerce_payment_gateway.plugin.klarna_payments:
     password:
       type: string
       label: 'Merchant Authentication Hash'
-    locale:
-      type: string
-      label: 'Locale'
+    options:
+      type: sequence
+      label: 'Options'
