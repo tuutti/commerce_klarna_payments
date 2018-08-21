@@ -76,11 +76,31 @@ class Request extends RequestBase implements RequestInterface {
   }
 
   /**
+   * Gets the billing address.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface|null
+   *   The billing address.
+   */
+  public function getBillingAddress() : ? AddressInterface {
+    return $this->data['billing_address'] ?? NULL;
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function setShippingAddress(AddressInterface $address) : RequestInterface {
     $this->data['shipping_address'] = $address;
     return $this;
+  }
+
+  /**
+   * Gets the shipping address.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface|null
+   *   The shipping address.
+   */
+  public function getShippingAddress() : ? AddressInterface {
+    return $this->data['shipping_address'] ?? NULL;
   }
 
   /**
@@ -110,6 +130,16 @@ class Request extends RequestBase implements RequestInterface {
   }
 
   /**
+   * Gets the order items.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface[]
+   *   The order lines.
+   */
+  public function getOrderItems() : array {
+    return $this->data['order_lines'] ?? [];
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function addOrderItem(OrderItemInterface $orderItem) : RequestInterface {
@@ -132,6 +162,16 @@ class Request extends RequestBase implements RequestInterface {
   public function setMerchantUrls(UrlsetInterface $urlset) : RequestInterface {
     $this->data['merchant_urls'] = $urlset;
     return $this;
+  }
+
+  /**
+   * Gets the merchant urls.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\UrlsetInterface|null
+   *   The merchant urls or NULL.
+   */
+  public function getMerchantUrls() : ? UrlsetInterface {
+    return $this->data['merchant_urls'] ?? NULL;
   }
 
   /**
@@ -167,11 +207,31 @@ class Request extends RequestBase implements RequestInterface {
   }
 
   /**
+   * Gets the options.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface|null
+   *   The options or NULL.
+   */
+  public function getOptions() : ? OptionsInterface {
+    return $this->data['options'] ?? NULL;
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function setAttachments(AttachmentInterface $attachment) : RequestInterface {
     $this->data['attachments'] = $attachment;
     return $this;
+  }
+
+  /**
+   * Gets the attachments.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface|null
+   *   The attachments.
+   */
+  public function getAttachments() : ? AttachmentInterface {
+    return $this->data['attachments'] ?? NULL;
   }
 
   /**

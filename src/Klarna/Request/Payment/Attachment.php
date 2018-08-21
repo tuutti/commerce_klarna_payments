@@ -33,4 +33,14 @@ class Attachment implements AttachmentInterface {
     return $this;
   }
 
+  /**
+   * Gets the body.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentItemInterface|null
+   *   The body or NULL.
+   */
+  public function getBody() : ? AttachmentItemInterface {
+    return $this->data['body'] ?? NULL;
+  }
+
 }

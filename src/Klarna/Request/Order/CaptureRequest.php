@@ -44,6 +44,16 @@ class CaptureRequest extends RequestBase implements CreateCaptureInterface {
   }
 
   /**
+   * Gets the order items.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface[]
+   *   The order lines.
+   */
+  public function getOrderItems() : array {
+    return $this->data['order_lines'] ?? [];
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function addOrderItem(OrderItemInterface $orderItem) : CreateCaptureInterface {
@@ -58,6 +68,16 @@ class CaptureRequest extends RequestBase implements CreateCaptureInterface {
   public function setShippingInformation(ShippingInformationInterface $info) : CreateCaptureInterface {
     $this->data['shipping_info'] = $info;
     return $this;
+  }
+
+  /**
+   * Gets the shipping info.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\ShippingInformationInterface|null
+   *   The shipping info or NULL.
+   */
+  public function getShippinfInformation() : ? ShippingInformationInterface {
+    return $this->data['shipping_info'] ?? NULL;
   }
 
   /**
