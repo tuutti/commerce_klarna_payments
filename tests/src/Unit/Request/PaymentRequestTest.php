@@ -203,9 +203,9 @@ class PaymentRequestTest extends UnitTestCase {
   }
 
   /**
-   * @covers ::setAttachments
+   * @covers ::setAttachment
    */
-  public function testSetAttachments() {
+  public function testSetAttachment() {
     $attachment = $this->getMockBuilder(AttachmentInterface::class)
       ->getMock();
     $attachment->expects($this->any())
@@ -214,10 +214,10 @@ class PaymentRequestTest extends UnitTestCase {
         'content_type' => 'test',
       ]);
 
-    $request = (new Request())->setAttachments($attachment);
+    $request = (new Request())->setAttachment($attachment);
 
     $this->assertEquals([
-      'attachments' => ['content_type' => 'test'],
+      'attachment' => ['content_type' => 'test'],
     ], $request->toArray());
   }
 

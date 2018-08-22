@@ -219,19 +219,19 @@ class Request extends RequestBase implements RequestInterface {
   /**
    * {@inheritdoc}
    */
-  public function setAttachments(AttachmentInterface $attachment) : RequestInterface {
-    $this->data['attachments'] = $attachment;
+  public function setAttachment(AttachmentInterface $attachment) : RequestInterface {
+    $this->data['attachment'] = $attachment;
     return $this;
   }
 
   /**
-   * Gets the attachments.
+   * Gets the attachment.
    *
    * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AttachmentInterface|null
-   *   The attachments.
+   *   The attachment.
    */
-  public function getAttachments() : ? AttachmentInterface {
-    return $this->data['attachments'] ?? NULL;
+  public function getAttachment() : ? AttachmentInterface {
+    return $this->data['attachment'] ?? NULL;
   }
 
   /**

@@ -215,7 +215,7 @@ interface RequestInterface extends ObjectInterface, RequestInterfaceBase {
    * @return $this
    *   The self.
    */
-  public function setAttachments(AttachmentInterface $attachment) : RequestInterface;
+  public function setAttachment(AttachmentInterface $attachment) : RequestInterface;
 
   /**
    * Sets the custom payment method ids.
