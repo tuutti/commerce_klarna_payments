@@ -14,15 +14,13 @@ use Drupal\commerce_klarna_payments\Klarna\Data\Payment\HotelReservationInterfac
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\SubscriptionInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\TrainReservationTransportInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\VoucherInterface;
-use Drupal\commerce_klarna_payments\Klarna\ObjectNormalizer;
+use Drupal\commerce_klarna_payments\Klarna\RequestBase;
 use Webmozart\Assert\Assert;
 
 /**
  * Value object for attachment item.
  */
-class AttachmentItem implements AttachmentItemInterface {
-
-  use ObjectNormalizer;
+class AttachmentItem extends RequestBase implements AttachmentItemInterface {
 
   protected $data = [];
 

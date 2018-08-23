@@ -8,6 +8,9 @@ use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
+use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Attachment;
+use Drupal\commerce_klarna_payments\Klarna\Request\Payment\AttachmentItem;
+use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Voucher;
 use Drupal\commerce_klarna_payments\Klarna\Service\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -84,7 +87,15 @@ final class RequestSubscriber implements EventSubscriberInterface {
    */
   public function onSessionCreate(RequestEvent $event) {
     if (!$event->getRequest() instanceof RequestInterface) {
+      /** @var \Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request $request */
       $request = $this->buildRequest($event->getOrder(), 'create');
+      $voucher = (new Voucher())
+        ->setEndTime((new \DateTime())->modify('+12 days'))
+        ->setStartTime(new \DateTime())
+        ->setName('Testi');
+      $body = (new AttachmentItem())
+        ->addVoucher($voucher);
+      $request->setAttachment((new Attachment())->setBody($body));
 
       $event->setRequest($request);
     }
