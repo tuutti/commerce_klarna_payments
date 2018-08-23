@@ -89,13 +89,6 @@ final class RequestSubscriber implements EventSubscriberInterface {
     if (!$event->getRequest() instanceof RequestInterface) {
       /** @var \Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request $request */
       $request = $this->buildRequest($event->getOrder(), 'create');
-      $voucher = (new Voucher())
-        ->setEndTime((new \DateTime())->modify('+12 days'))
-        ->setStartTime(new \DateTime())
-        ->setName('Testi');
-      $body = (new AttachmentItem())
-        ->addVoucher($voucher);
-      $request->setAttachment((new Attachment())->setBody($body));
 
       $event->setRequest($request);
     }
