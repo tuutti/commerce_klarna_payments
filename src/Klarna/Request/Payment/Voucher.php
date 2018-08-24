@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Klarna\Request\Payment;
 
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\VoucherInterface;
+use Drupal\commerce_klarna_payments\Klarna\DateTrait;
 use Drupal\commerce_klarna_payments\Klarna\ObjectNormalizer;
 
 /**
@@ -12,6 +13,7 @@ use Drupal\commerce_klarna_payments\Klarna\ObjectNormalizer;
  */
 class Voucher implements VoucherInterface {
 
+  use DateTrait;
   use ObjectNormalizer {
     toArray as parentToArray;
   }
@@ -92,7 +94,7 @@ class Voucher implements VoucherInterface {
 
     foreach ($data as $key => $value) {
       if ($value instanceof \DateTime) {
-        $data[$key] = $value->format('c');
+        $data[$key] = $this->format($value);
       }
     }
     return $data;
