@@ -155,7 +155,7 @@ class RequestBuilder extends RequestBuilderBase {
    *   The order line item.
    */
   protected function createOrderLine(CommerceOrderItemInterface $item) : OrderItemInterface {
-    $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
+    $unitPrice = (int) $item->getAdjustedUnitPrice()->multiply('100')->getNumber();
 
     $orderItem = (new OrderItem())
       ->setName((string) $item->getTitle())
@@ -169,6 +169,9 @@ class RequestBuilder extends RequestBuilderBase {
         continue;
       }
       $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
+      if ($item->usesLegacyAdjustments()) {
+        $tax = (int) ($tax * $item->getQuantity());
+      }
 
       if (!$percentage = $adjustment->getPercentage()) {
         $percentage = '0';
@@ -176,7 +179,7 @@ class RequestBuilder extends RequestBuilderBase {
       // Multiply tax rate to have two implicit decimals, 2500 = 25%.
       $orderItem->setTaxRate((int) Calculator::multiply($percentage, '10000'))
         // Calculate total tax for order item.
-        ->setTotalTaxAmount((int) ($tax * $item->getQuantity()));
+        ->setTotalTaxAmount($tax);
     }
 
     return $orderItem;
