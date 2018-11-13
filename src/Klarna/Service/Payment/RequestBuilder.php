@@ -155,7 +155,7 @@ class RequestBuilder extends RequestBuilderBase {
    *   The order line item.
    */
   protected function createOrderLine(CommerceOrderItemInterface $item) : OrderItemInterface {
-    $unitPrice = (int) $item->getUnitPrice()->multiply('100')->getNumber();
+    $unitPrice = (int) $item->getAdjustedUnitPrice()->multiply('100')->getNumber();
 
     $orderItem = (new OrderItem())
       ->setName((string) $item->getTitle())
