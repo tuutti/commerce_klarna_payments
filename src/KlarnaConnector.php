@@ -17,6 +17,7 @@ use GuzzleHttp\Exception\ClientException;
 use Klarna\Rest\OrderManagement\Order;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
+use Klarna\Rest\Transport\UserAgent;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -62,11 +63,15 @@ final class KlarnaConnector {
    */
   protected function getConnector(Klarna $plugin) : Connector {
     if (!$this->connector) {
+      $ua = (new UserAgent())
+        ->setField('Library', 'drupal-klarna-payments-v1');
+
       // Populate default connector.
       $this->connector = Connector::create(
         $plugin->getUsername(),
         $plugin->getPassword(),
-        $plugin->getApiUri()
+        $plugin->getApiUri(),
+        $ua
       );
     }
     return $this->connector;
