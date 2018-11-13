@@ -140,15 +140,55 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   }
 
   /**
+   * Updates the order number at Klarna on order placement.
+   *
+   * In difference to the onOrderPlace() callback, which is also triggered on
+   * validate and fulfill transitions, this callback is solely for order
+   * placement.
+   *
+   * @param \Drupal\state_machine\Event\WorkflowTransitionEvent $event
+   *   The transition event.
+   */
+  public function updateOrderNumberOnPlace(WorkflowTransitionEvent $event) : void {
+    /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+    $order = $event->getEntity();
+
+    try {
+      $this->connector->getPlugin($order);
+    }
+    catch (\InvalidArgumentException $e) {
+      // Non-klarna order.
+      return;
+    }
+
+    try {
+      $klarnaOrder = $this->connector->getOrder($order);
+      if (empty($klarnaOrder['merchant_reference1'])) {
+        // Set the order number.
+        $klarnaOrder->updateMerchantReferences([
+          'merchant_reference1' => $order->getOrderNumber(),
+        ]);
+      }
+    }
+    catch (\Exception $e) {
+      $this->logger->warning($this->t('Setting Klarna order number failed for order @order: @message', [
+        '@order' => $order->id(),
+        '@message' => $e->getMessage(),
+      ]));
+    }
+  }
+
+  /**
    * {@inheritdoc}
    */
   public static function getSubscribedEvents() {
     $events = [];
 
-    // Subsribe to every known transition phase that leads to 'completed' state.
+    // Subscribe to every known transition phase that leads to 'completed' state.
     foreach (['place', 'validate', 'fulfill'] as $transition) {
-      $events[sprintf('commerce_order.%s.post_transition', $transition)] = ['onOrderPlace'];
+      $events[sprintf('commerce_order.%s.post_transition', $transition)] = [['onOrderPlace']];
     }
+    $events['commerce_order.place.post_transition'][] = ['updateOrderNumberOnPlace'];
     return $events;
   }
 
