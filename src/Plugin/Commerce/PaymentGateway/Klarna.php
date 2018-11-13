@@ -221,7 +221,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
     $arguments = array_merge($arguments, [
       'step' => 'payment',
       'commerce_order' => $order->id(),
-      'commerce_payment_gateway' => $this->getPluginId(),
+      'commerce_payment_gateway' => $this->entityId,
     ]);
 
     return (new Url($routeName, $arguments, ['absolute' => TRUE]))
