@@ -60,9 +60,9 @@ class RequestBuilder extends RequestBuilderBase {
    *   The capture request.
    */
   protected function createCaptureRequest(CreateCaptureInterface $request) : CreateCaptureInterface {
-    $totalPrice = $this->order->getTotalPrice();
+    $balance = $this->order->getBalance();
 
-    $request->setCapturedAmount((int) $totalPrice->multiply('100')->getNumber());
+    $request->setCapturedAmount((int) $balance->multiply('100')->getNumber());
 
     foreach ($this->order->getItems() as $item) {
       $orderItem = $this->createOrderLine($item);

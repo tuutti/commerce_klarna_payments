@@ -4,14 +4,19 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
+use Drupal\commerce_klarna_payments\Event\Events;
+use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\KlarnaConnector;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotificationsInterface;
+use Drupal\commerce_price\Price;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -35,7 +40,7 @@ use Webmozart\Assert\Assert;
  *   },
  * )
  */
-final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotificationsInterface {
+final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface {
 
   use OptionsHelper;
 
@@ -336,6 +341,60 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsNotifica
       ->save();
 
     $klarnaOrder->acknowledge();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
+    $this->assertPaymentState($payment, ['authorization']);
+    // If not specified, capture the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+
+    $order = $payment->getOrder();
+    $klarnaOrder = $this->connector->getOrder($order);
+
+    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
+    $request = $this->eventDispatcher
+      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order));
+
+    try {
+      $request->getRequest()
+        ->setCapturedAmount((int) $amount->multiply('100')->getNumber());
+      $capture = $klarnaOrder->createCapture($request->getRequest()->toArray());
+      $capture->fetch();
+    }
+    catch (\Exception $e) {
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    $transition = $payment->getState()->getWorkflow()->getTransition('capture');
+    $payment->getState()->applyTransition($transition);
+
+    $payment->setAmount($amount);
+    $payment->setRemoteId($capture->getId());
+    $payment->save();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function voidPayment(PaymentInterface $payment) {
+    $this->assertPaymentState($payment, ['authorization']);
+    $order = $payment->getOrder();
+
+    try {
+      $klarnaOrder = $this->connector->getOrder($order);
+      // @todo Find out, if a DELETE /payments/v1/authorizations/{authorizationToken}
+      // request would be better here.
+      $klarnaOrder->cancel();
+    }
+    catch (\Exception $e) {
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    $payment->setState('authorization_voided');
+    $payment->save();
   }
 
 }

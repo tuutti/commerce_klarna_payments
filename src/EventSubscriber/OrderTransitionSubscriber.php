@@ -81,7 +81,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     $klarna_payment = NULL;
 
     foreach ($payments as $payment) {
-      if ($payment->getPaymentGatewayId() !== $plugin->getEntityId() || $payment->getAmount()->compareTo($order->getTotalPrice()) !== 0) {
+      if ($payment->getPaymentGatewayId() !== $plugin->getEntityId() || $payment->getState()->value != 'authorization') {
         continue;
       }
       $klarna_payment = $payment;
