@@ -81,7 +81,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     $klarna_payment = NULL;
 
     foreach ($payments as $payment) {
-      if ($payment->getPaymentGatewayId() !== $plugin->getEntityId() || $payment->getState()->value != 'authorization') {
+      if ($payment->getPaymentGatewayId() !== $plugin->getEntityId() || $payment->getState()->value !== 'authorization') {
         continue;
       }
       $klarna_payment = $payment;
@@ -120,6 +120,21 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     try {
       $klarnaOrder = $this->connector->getOrder($order);
 
+      // No payment found. This usually happens when we have done a partial
+      // capture (manually).
+      if (!$payment = $this->getPayment($order)) {
+        $payments = $this->paymentStorage->loadMultipleByOrder($order);
+        $klarnaOrder->fetch();
+
+        // Release the remaining authorization in case we have at least
+        // one capture made already.
+        if (!empty($klarnaOrder['captures']) && !empty($payments)) {
+          $klarnaOrder->releaseRemainingAuthorization();
+
+          return;
+        }
+        throw new \InvalidArgumentException('Payment not found.');
+      }
       /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
       $request = $this->eventDispatcher
         ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order));
@@ -127,9 +142,6 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       $capture = $klarnaOrder->createCapture($request->getRequest()->toArray());
       $capture->fetch();
 
-      if (!$payment = $this->getPayment($order)) {
-        throw new \InvalidArgumentException('Payment not found.');
-      }
       $transition = $payment->getState()->getWorkflow()->getTransition('capture');
       $payment->getState()->applyTransition($transition);
 
@@ -169,6 +181,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
 
     try {
       $klarnaOrder = $this->connector->getOrder($order);
+
       if (empty($klarnaOrder['merchant_reference1'])) {
         // Set the order number.
         $klarnaOrder->updateMerchantReferences([
@@ -177,7 +190,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       }
     }
     catch (\Exception $e) {
-      $this->logger->warning($this->t('Setting Klarna order number failed for order @order: @message', [
+      $this->logger->warning(new TranslatableMarkup('Setting Klarna order number failed for order @order: @message', [
         '@order' => $order->id(),
         '@message' => $e->getMessage(),
       ]));
@@ -190,7 +203,8 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   public static function getSubscribedEvents() {
     $events = [];
 
-    // Subscribe to every known transition phase that leads to 'completed' state.
+    // Subscribe to every known transition phase that leads to 'completed'
+    // state.
     foreach (['place', 'validate', 'fulfill'] as $transition) {
       $events[sprintf('commerce_order.%s.post_transition', $transition)] = [['onOrderPlace']];
     }
