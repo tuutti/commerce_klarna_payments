@@ -7,6 +7,7 @@ namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
+use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemTypeInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface as RequestInterfaceBase;
 use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
@@ -121,6 +122,25 @@ class RequestBuilder extends RequestBuilderBase {
       }
     }
     $request->setOrderTaxAmount($totalTax);
+
+    // Inspect order adjustments to include shipping fees.
+    foreach ($this->order->getAdjustments() as $orderAdjustment) {
+      $amount = (int) $orderAdjustment->getAmount()->multiply('100')->getNumber();
+
+      switch ($orderAdjustment->getType()) {
+        case 'shipping':
+          // @todo keep watching progress of https://www.drupal.org/node/2874158.
+          $shippingOrderItem = (new OrderItem())
+            ->setName((string) $orderAdjustment->getLabel())
+            ->setQuantity(1)
+            ->setUnitPrice($amount)
+            ->setTotalAmount($amount)
+            ->setType(OrderItemTypeInterface::TYPE_SHIPPING_FEE);
+
+          $request->addOrderItem($shippingOrderItem);
+          break;
+      }
+    }
 
     return $request;
   }
