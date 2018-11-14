@@ -104,6 +104,12 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       return;
     }
 
+    // If the order is already paid in full, there's no need for trying to
+    // capture the payment again.
+    if ($order->isPaid()) {
+      return;
+    }
+
     try {
       $this->connector->getPlugin($order);
     }
