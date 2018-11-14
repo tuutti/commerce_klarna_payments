@@ -117,7 +117,7 @@ class RequestBuilder extends RequestBuilderBase {
       // Collect taxes only if enabled.
       if ($this->hasTaxesIncluded()) {
         // Calculate total tax amount.
-        $totalTax += $orderItem->toArray()['total_tax_amount'];
+        $totalTax += $orderItem->getTotalTaxAmount();
       }
     }
     $request->setOrderTaxAmount($totalTax);
