@@ -140,6 +140,21 @@ class Request extends RequestBase implements RequestInterface {
   }
 
   /**
+   * Gets order items of given type.
+   *
+   * @param string $type
+   *   The order item type to get.
+   *
+   * @return \Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface[]
+   *   The order lines.
+   */
+  public function getOrderItemsOfType(string $type) : array {
+    return array_filter($this->getOrderItems(), function (OrderItemInterface $orderItem) use ($type) {
+      return $orderItem->getType() === $type;
+    });
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function addOrderItem(OrderItemInterface $orderItem) : RequestInterface {
