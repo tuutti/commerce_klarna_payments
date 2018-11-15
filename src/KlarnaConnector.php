@@ -15,6 +15,8 @@ use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use GuzzleHttp\Exception\ClientException;
 use Klarna\Rest\OrderManagement\Order;
+use Klarna\Rest\Payments\Orders;
+use Klarna\Rest\Payments\Sessions;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Klarna\Rest\Transport\UserAgent;
@@ -83,15 +85,15 @@ final class KlarnaConnector {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Rest\Session
+   * @return \Klarna\Rest\Payments\Sessions
    *   The Klarna session.
    */
-  protected function getSession(OrderInterface $order) : Session {
+  protected function getSession(OrderInterface $order) : Sessions {
     $plugin = $this->getPlugin($order);
     // Attempt to use already stored session id.
     $sessionId = $order->getData('klarna_session_id', NULL);
 
-    return new Session($this->getConnector($plugin), $sessionId);
+    return new Sessions($this->getConnector($plugin), $sessionId);
   }
 
   /**
@@ -186,14 +188,14 @@ final class KlarnaConnector {
     $build = $request->toArray();
 
     $plugin = $this->getPlugin($order);
-    $authorizer = new Authorization($this->getConnector($plugin), $authorizeToken);
-    $authorizer->create($build);
+    $authorizer = new Orders($this->getConnector($plugin), $authorizeToken);
+    $data = $authorizer->create($build);
 
-    if (!isset($authorizer['fraud_status'], $authorizer['redirect_url'], $authorizer['order_id'])) {
+    if (!isset($data['fraud_status'], $data['redirect_url'], $data['order_id'])) {
       throw new \InvalidArgumentException('Authorization validation failed.');
     }
 
-    $response = AuthorizationResponse::createFromRequest($authorizer);
+    $response = AuthorizationResponse::createFromArray($data);
 
     if (!$response->isAccepted() && !$response->isPending()) {
       throw new FraudException('Fraud validation failed.');

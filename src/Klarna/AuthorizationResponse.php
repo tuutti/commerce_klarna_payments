@@ -4,8 +4,6 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Klarna;
 
-use Drupal\commerce_klarna_payments\Klarna\Rest\Authorization;
-
 /**
  * Value object for authorization response.
  */
@@ -34,13 +32,13 @@ class AuthorizationResponse {
   /**
    * Creates new response object for given response.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Rest\Authorization $authorization
+   * @param array $authorization
    *   The authorization.
    *
    * @return self
    *   The self.
    */
-  public static function createFromRequest(Authorization $authorization) : self {
+  public static function createFromArray(array $authorization) : self {
     return new static($authorization['order_id'], $authorization['redirect_url'], $authorization['fraud_status']);
   }
 
