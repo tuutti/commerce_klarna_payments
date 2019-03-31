@@ -1,6 +1,6 @@
 # Commerce Klarna Payments
 
-[![Build Status](https://travis-ci.org/tuutti/commerce_klarna_payments.svg?branch=8.x-1.x)](https://travis-ci.org/tuutti/commerce_klarna_payments)
+[![Build Status](https://gitlab.com/tuutti/commerce_klarna_payments/badges/8.x-1.x/pipeline.svg)](https://travis-ci.org/tuutti/commerce_klarna_payment://gitlab.com/tuutti/commerce_klarna_payments)
 
 ## Description
 
