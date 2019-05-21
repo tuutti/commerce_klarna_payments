@@ -44,9 +44,8 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
    * {@inheritdoc}
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
-    $plugin = $this->getPaymentPlugin();
-
     $form = parent::buildConfigurationForm($form, $form_state);
+    $plugin = $this->getPaymentPlugin();
 
     if (!$order = $this->entity->getOrder()) {
       $this->messenger()->addError(
@@ -122,14 +121,9 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
    * {@inheritdoc}
    */
   public function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
-
-    $form['commerce_message'] = [
-      '#weight' => -10,
-      '#process' => [
-        [get_class($this), 'processRedirectForm'],
-      ],
-      '#action' => $redirect_url,
-    ];
+    $form['#process'][] = [get_class($this), 'processRedirectForm'];
+    $form['#redirect_url'] = $redirect_url;
+    $form['#method'] = self::REDIRECT_GET;
 
     return $form;
   }
