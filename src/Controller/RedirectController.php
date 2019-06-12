@@ -6,7 +6,6 @@ namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce\Response\NeedsRedirectException;
 use Drupal\commerce_checkout\CheckoutOrderManager;
-use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Component\Utility\NestedArray;
@@ -15,6 +14,7 @@ use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Klarna\Rest\Transport\Exception\ConnectorException;
+use KlarnaPayments\Exception\FraudException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 

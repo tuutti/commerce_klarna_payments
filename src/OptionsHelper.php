@@ -4,9 +4,8 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface;
-use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Options;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
+use KlarnaPayments\Data\Payment\Options;
 
 /**
  * Provides a helper trait for Klarna's options setting.
@@ -62,11 +61,12 @@ trait OptionsHelper {
   /**
    * Gets the options object.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\OptionsInterface
+   * @return \KlarnaPayments\Data\Payment\Options
    *   The options.
    */
-  protected function getOptions() : OptionsInterface {
-    return Options::create($this->getPluginConfiguration()['options']);
+  protected function getOptions() : Options {
+    $options = new Options();
+    return $options->populateFromArray($this->getPluginConfiguration()['options']);
   }
 
 }

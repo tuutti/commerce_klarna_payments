@@ -20,6 +20,7 @@ use Klarna\Rest\Payments\Sessions;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Klarna\Rest\Transport\UserAgent;
+use KlarnaPayments\Request\Order\OrderRequest;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -102,10 +103,10 @@ final class KlarnaConnector {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
+   * @return \KlarnaPayments\Request\Order\OrderRequest
    *   The request.
    */
-  public function authorizeRequest(OrderInterface $order) : RequestInterface {
+  public function authorizeRequest(OrderInterface $order) : OrderRequest {
     /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $event */
     $event = $this->eventDispatcher
       ->dispatch(Events::ORDER_CREATE, new RequestEvent($order));
@@ -138,8 +139,6 @@ final class KlarnaConnector {
 
   /**
    * Gets the Klarna order for given order.
-   *
-   * @todo Create response value object.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.

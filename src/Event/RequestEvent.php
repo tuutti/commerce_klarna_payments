@@ -4,8 +4,8 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Event;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
+use KlarnaPayments\Request\RequestBase;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
@@ -39,23 +39,23 @@ final class RequestEvent extends Event {
   /**
    * Gets the request.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface|null
+   * @return \KlarnaPayments\Request\RequestBase|null
    *   The klarna request.
    */
-  public function getRequest() : ? RequestInterface {
+  public function getRequest() : ? RequestBase {
     return $this->request;
   }
 
   /**
    * Sets the data.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface $request
+   * @param \KlarnaPayments\Request\RequestBase $request
    *   The request.
    *
    * @return $this
    *   The self.
    */
-  public function setRequest(RequestInterface $request) : self {
+  public function setRequest(RequestBase $request) : self {
     $this->request = $request;
     return $this;
   }
