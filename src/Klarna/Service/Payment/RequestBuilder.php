@@ -4,22 +4,16 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\OrderItemTypeInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface as RequestInterfaceBase;
-use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
-use Drupal\commerce_klarna_payments\Klarna\Request\Address;
-use Drupal\commerce_klarna_payments\Klarna\Request\MerchantUrlset;
-use Drupal\commerce_klarna_payments\Klarna\Request\Order\CaptureRequest;
-use Drupal\commerce_klarna_payments\Klarna\Request\OrderItem;
-use Drupal\commerce_klarna_payments\Klarna\Request\Payment\AuthorizationRequest;
-use Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request;
+use Drupal\commerce_klarna_payments\Klarna\Bridge\UnitBridge;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
-use Drupal\commerce_order\Entity\OrderItemInterface as CommerceOrderItemInterface;
-use Drupal\commerce_price\Calculator;
+use Drupal\commerce_order\Entity\OrderItemInterface;
+use KlarnaPayments\Data\Amount;
+use KlarnaPayments\Data\Payment\ContactAddress;
+use KlarnaPayments\Data\Payment\MerchantUrlset;
+use KlarnaPayments\Data\Payment\OrderLine;
+use KlarnaPayments\Data\Payment\OrderLineType;
+use KlarnaPayments\Data\Payment\Session;
+use KlarnaPayments\Data\ValueBase;
 
 /**
  * Provides a request builder.
@@ -31,11 +25,8 @@ class RequestBuilder extends RequestBuilderBase {
    *
    * @param string $type
    *   The request type.
-   *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
-   *   The request.
    */
-  public function generateRequest(string $type) : RequestInterfaceBase {
+  public function generateRequest(string $type) : ValueBase {
     switch ($type) {
       case 'create':
       case 'update':
@@ -74,75 +65,70 @@ class RequestBuilder extends RequestBuilderBase {
   }
 
   /**
-   * Creates update/create request object.
+   * Creates update/create session object.
    *
-   * @todo Figure out how to deal with minor units.
+   * @param \KlarnaPayments\Data\Payment\Session $session
+   *   The request.
+   *
+   * @return \KlarnaPayments\Data\Payment\Session
+   *   The request.
+   *
    * @todo Support shipping fees.
    * @todo Figure out what to do when order is in PENDING state.
-   *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
-   *   The request.
-   *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
-   *   The request.
    */
-  protected function createUpdateRequest(RequestInterface $request) : RequestInterface {
-    $totalPrice = $this->order->getTotalPrice();
-
-    $request
+  protected function createUpdateRequest(Session $session) : Session {
+    $session
       ->setPurchaseCountry($this->getStoreLanguage())
-      ->setPurchaseCurrency($totalPrice->getCurrencyCode())
       ->setLocale($this->localeResolver->resolve($this->order))
-      ->setOrderAmount((int) $totalPrice->multiply('100')->getNumber())
+      ->setOrderAmount(UnitBridge::toAmount($this->order->getTotalPrice()))
       ->setMerchantUrls(
-        new MerchantUrlset([
-          'confirmation' => $this->plugin->getReturnUri($this->order, 'commerce_payment.checkout.return'),
+        (new MerchantUrlset())
+          ->setConfirmation($this->plugin->getReturnUri($this->order, 'commerce_payment.checkout.return'))
           // @todo Implement this.
-          'notification' => $this->plugin->getReturnUri($this->order, 'commerce_payment.notify', [
+          ->setNotification($this->plugin->getReturnUri($this->order, 'commerce_payment.notify', [
             'step' => 'complete',
-          ]),
-        ])
+          ]))
       )
       ->setOptions($this->getOptions());
 
     if ($billingAddress = $this->getBillingAddress()) {
-      $request->setBillingAddress($billingAddress);
+      $session->setBillingAddress($billingAddress);
     }
 
     $totalTax = 0;
 
     foreach ($this->order->getItems() as $item) {
-      $orderItem = $this->createOrderLine($item);
-      $request->addOrderItem($orderItem);
+      $orderLine = $this->createOrderLine($item);
+      $session->addOrderLine($orderLine);
 
       // Collect taxes only if enabled.
       if ($this->hasTaxesIncluded()) {
         // Calculate total tax amount.
-        $totalTax += $orderItem->getTotalTaxAmount();
+        $totalTax += $orderLine->getTotalTaxAmount();
       }
     }
-    $request->setOrderTaxAmount($totalTax);
+    $session->setOrderTaxAmount($totalTax);
 
     // Inspect order adjustments to include shipping fees.
     foreach ($this->order->getAdjustments() as $orderAdjustment) {
-      $amount = (int) $orderAdjustment->getAmount()->multiply('100')->getNumber();
+      $amount = UnitBridge::toAmount($orderAdjustment->getAmount());
 
       switch ($orderAdjustment->getType()) {
         case 'shipping':
           // @todo keep watching progress of https://www.drupal.org/node/2874158.
-          $shippingOrderItem = (new OrderItem())
+          $shippingOrderItem = (new OrderLine())
             ->setName((string) $orderAdjustment->getLabel())
             ->setQuantity(1)
             ->setUnitPrice($amount)
             ->setTotalAmount($amount)
-            ->setType(OrderItemTypeInterface::TYPE_SHIPPING_FEE);
+            ->setType(OrderLineType::SHIPPING_FEE);
 
-          $request->addOrderItem($shippingOrderItem);
+          $session->addOrderLine($shippingOrderItem);
           break;
       }
     }
 
-    return $request;
+    return $session;
   }
 
   /**
@@ -171,33 +157,32 @@ class RequestBuilder extends RequestBuilderBase {
    * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
    *   The order item to create order line from.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\OrderItemInterface
+   * @return \KlarnaPayments\Data\Payment\OrderLine
    *   The order line item.
    */
-  protected function createOrderLine(CommerceOrderItemInterface $item) : OrderItemInterface {
-    $unitPrice = (int) $item->getAdjustedUnitPrice()->multiply('100')->getNumber();
+  protected function createOrderLine(OrderItemInterface $item) : OrderLine {
+    $unitPrice = UnitBridge::toAmount($item->getAdjustedUnitPrice());
 
-    $orderItem = (new OrderItem())
+    $orderItem = (new OrderLine())
       ->setName((string) $item->getTitle())
       ->setQuantity((int) $item->getQuantity())
       ->setUnitPrice($unitPrice)
-      ->setTotalAmount((int) ($unitPrice * $item->getQuantity()));
+      ->setTotalAmount(
+        new Amount($unitPrice->getNumber() * $item->getQuantity(), $unitPrice->getCurrency())
+      );
 
     foreach ($item->getAdjustments() as $adjustment) {
       // Only tax adjustments are supported by default.
       if ($adjustment->getType() !== 'tax') {
         continue;
       }
-      $tax = (int) $adjustment->getAmount()->multiply('100')->getNumber();
-      if ($item->usesLegacyAdjustments()) {
-        $tax = (int) ($tax * $item->getQuantity());
-      }
+      $tax = UnitBridge::toAmount($adjustment->getAmount());
 
       if (!$percentage = $adjustment->getPercentage()) {
         $percentage = '0';
       }
       // Multiply tax rate to have two implicit decimals, 2500 = 25%.
-      $orderItem->setTaxRate((int) Calculator::multiply($percentage, '10000'))
+      $orderItem->setTaxRate(UnitBridge::toTaxRate($percentage))
         // Calculate total tax for order item.
         ->setTotalTaxAmount($tax);
     }
@@ -208,17 +193,17 @@ class RequestBuilder extends RequestBuilderBase {
   /**
    * Gets the billing address.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\AddressInterface|null
+   * @return \KlarnaPayments\Data\Payment\ContactAddress|null
    *   The billing address or null.
    */
-  protected function getBillingAddress() : ? AddressInterface {
+  protected function getBillingAddress() : ? ContactAddress {
     if (!$billingData = $this->order->getBillingProfile()) {
       return NULL;
     }
     /** @var \Drupal\address\AddressInterface $address */
     $address = $billingData->get('address')->first();
 
-    $profile = (new Address())
+    $profile = (new ContactAddress())
       ->setEmail($this->order->getEmail());
 
     if ($code = $address->getCountryCode()) {

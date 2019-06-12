@@ -57,9 +57,9 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     $form = $this->buildRedirectForm($form, $form_state, $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect'));
 
     try {
-      $request = $plugin->getKlarnaConnector()->sessionRequest($order);
       $data = $plugin->getKlarnaConnector()
-        ->buildTransaction($request, $order);
+        ->buildTransaction($order)
+        ->toArray();
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',

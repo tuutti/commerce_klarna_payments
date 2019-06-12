@@ -6,11 +6,6 @@ namespace Drupal\commerce_klarna_payments;
 
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
-use Drupal\commerce_klarna_payments\Klarna\AuthorizationResponse;
-use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
-use Drupal\commerce_klarna_payments\Klarna\Exception\FraudException;
-use Drupal\commerce_klarna_payments\Klarna\Rest\Authorization;
-use Drupal\commerce_klarna_payments\Klarna\Rest\Session;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use GuzzleHttp\Exception\ClientException;
@@ -20,7 +15,10 @@ use Klarna\Rest\Payments\Sessions;
 use Klarna\Rest\Transport\Connector;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Klarna\Rest\Transport\UserAgent;
+use KlarnaPayments\Data\Payment\Session;
 use KlarnaPayments\Request\Order\OrderRequest;
+use KlarnaPayments\Request\Payment\SessionRequest;
+use KlarnaPayments\Response\Payment\SessionResponse;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -78,23 +76,6 @@ final class KlarnaConnector {
       );
     }
     return $this->connector;
-  }
-
-  /**
-   * Gets the Klarna session.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\Rest\Payments\Sessions
-   *   The Klarna session.
-   */
-  protected function getSession(OrderInterface $order) : Sessions {
-    $plugin = $this->getPlugin($order);
-    // Attempt to use already stored session id.
-    $sessionId = $order->getData('klarna_session_id', NULL);
-
-    return new Sessions($this->getConnector($plugin), $sessionId);
   }
 
   /**
@@ -206,66 +187,50 @@ final class KlarnaConnector {
   }
 
   /**
-   * Gets the session request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface
-   *   The request.
-   */
-  public function sessionRequest(OrderInterface $order) : RequestInterface {
-    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $event */
-    $event = $this->eventDispatcher
-      ->dispatch(Events::SESSION_CREATE, new RequestEvent($order));
-
-    return $event->getRequest();
-  }
-
-  /**
    * Builds a new order transaction.
    *
-   * @todo Create response value object.
-   *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
-   *   The request.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return array
+   * @return \KlarnaPayments\Response\Payment\SessionResponse
    *   The Klarna request data.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
    */
-  public function buildTransaction(RequestInterface $request, OrderInterface $order) : array {
-    $build = $request->toArray();
+  public function buildTransaction(OrderInterface $order) : SessionResponse {
+    $plugin = $this->getPlugin($order);
 
-    $session = $this->getSession($order);
+    $session = $this->eventDispatcher
+      ->dispatch(Events::SESSION_CREATE, new RequestEvent($order))
+      ->getObject();
 
-    // Create new session if one doesn't exist already.
-    if (!isset($session['session_id'])) {
-      $session->create($build);
+    if (!$session) {
+      throw new \LogicException('Session is not set.');
     }
-    else {
-      try {
-        $session->update($build);
-        $session->fetch();
-      }
-      catch (ConnectorException | ClientException $e) {
-        // Attempt to create new session session if update failed.
-        // This usually happens when we have an expired session id
-        // saved in commerce order.
-        $session->create($build);
-      }
+
+    $sessionRequest = new SessionRequest($this->getConnector($plugin));
+    // Attempt to use already stored session id.
+    $sessionId = $order->getData('klarna_session_id', NULL);
+
+    try {
+      $sessionResponse = $sessionId ?
+        $sessionRequest->update($session, $sessionId) : $sessionRequest->create($session);
     }
+    catch (ConnectorException | ClientException $e) {
+      // Attempt to create new session session if update failed.
+      // This usually happens when we have an expired session id
+      // saved in commerce order.
+      $sessionResponse = $sessionRequest->create($session);
+    }
+
     // Session id will be reset when we update the session and
     // re-fetch. Update only if session id has changed.
-    if (!empty($session['session_id'])) {
+    if ($sessionId !== $sessionResponse->getSessionId()) {
       $order->setData('klarna_session_id', $session['session_id'])
         ->save();
     }
-    return $build + [
-      'client_token' => $session['client_token'],
-      'payment_method_categories' => $session['payment_method_categories'] ?? [],
-    ];
+
+    return $sessionResponse;
   }
 
 }

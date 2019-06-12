@@ -5,7 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Event;
 
 use Drupal\commerce_order\Entity\OrderInterface;
-use KlarnaPayments\Request\RequestBase;
+use KlarnaPayments\Data\Payment\Session;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
@@ -14,7 +14,7 @@ use Symfony\Component\EventDispatcher\Event;
 final class RequestEvent extends Event {
 
   protected $order;
-  protected $request;
+  protected $object;
 
   /**
    * Constructs a new instance.
@@ -37,27 +37,27 @@ final class RequestEvent extends Event {
   }
 
   /**
-   * Gets the request.
+   * Sets the session data.
    *
-   * @return \KlarnaPayments\Request\RequestBase|null
-   *   The klarna request.
-   */
-  public function getRequest() : ? RequestBase {
-    return $this->request;
-  }
-
-  /**
-   * Sets the data.
-   *
-   * @param \KlarnaPayments\Request\RequestBase $request
-   *   The request.
+   * @param \KlarnaPayments\Data\Payment\Session|\KlarnaPayments\Data\Order\Order $session
+   *   The session data.
    *
    * @return $this
    *   The self.
    */
-  public function setRequest(RequestBase $request) : self {
-    $this->request = $request;
+  public function setObject(Session $session) : self {
+    $this->object = $session;
     return $this;
+  }
+
+  /**
+   * Gets the request.
+   *
+   * @return \KlarnaPayments\Data\Payment\Session|\KlarnaPayments\Data\Order\Order
+   *   The session data.
+   */
+  public function getObject() : ? Session {
+    return $this->object;
   }
 
 }
