@@ -86,9 +86,8 @@ class RedirectController implements ContainerInjectionInterface {
     }
 
     try {
-      $request = $plugin->getKlarnaConnector()->authorizeRequest($commerce_order);
       $response = $plugin->getKlarnaConnector()
-        ->authorizeOrder($request, $commerce_order, $values['klarna_authorization_token']);
+        ->authorizeOrder($commerce_order, $values['klarna_authorization_token']);
 
       throw new NeedsRedirectException($response->getRedirectUrl());
     }

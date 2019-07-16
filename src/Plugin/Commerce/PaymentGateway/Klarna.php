@@ -133,6 +133,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   public function defaultConfiguration() {
     return [
       'mode' => 'test',
+      'locale' => 'automatic',
       'username' => '',
       'password' => '',
       'options' => [],

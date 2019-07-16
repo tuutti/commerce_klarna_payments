@@ -7,13 +7,15 @@ namespace Drupal\commerce_klarna_payments\Klarna\Service\Payment;
 use Drupal\commerce_klarna_payments\Klarna\Bridge\UnitBridge;
 use Drupal\commerce_klarna_payments\Klarna\Service\RequestBuilderBase;
 use Drupal\commerce_order\Entity\OrderItemInterface;
+use InvalidArgumentException;
 use KlarnaPayments\Data\Amount;
-use KlarnaPayments\Data\Payment\ContactAddress;
-use KlarnaPayments\Data\Payment\MerchantUrlset;
-use KlarnaPayments\Data\Payment\OrderLine;
-use KlarnaPayments\Data\Payment\OrderLineType;
-use KlarnaPayments\Data\Payment\Session;
+use KlarnaPayments\Data\Payment\Session\ContactAddress;
+use KlarnaPayments\Data\Payment\Session\MerchantUrlset;
+use KlarnaPayments\Data\Payment\Session\OrderLine;
+use KlarnaPayments\Data\Payment\Session\OrderLineType;
+use KlarnaPayments\Data\Payment\Session\Session;
 use KlarnaPayments\Data\ValueBase;
+use LogicException;
 
 /**
  * Provides a request builder.
@@ -26,19 +28,19 @@ class RequestBuilder extends RequestBuilderBase {
    * @param string $type
    *   The request type.
    */
-  public function generateRequest(string $type) : ValueBase {
+  public function createObject(string $type) : ValueBase {
     switch ($type) {
       case 'create':
       case 'update':
-        return $this->createUpdateRequest(new Request());
+        return $this->createUpdateRequest(new Session());
 
       case 'place':
-        return $this->createPlaceRequest(new AuthorizationRequest());
+        return $this->createPlaceRequest(new Session());
 
       case 'capture':
-        return $this->createCaptureRequest(new CaptureRequest());
+        //return $this->createCaptureRequest(new CaptureRequest());
     }
-    throw new \LogicException('Invalid type.');
+    throw new LogicException('Invalid type.');
   }
 
   /**
@@ -50,7 +52,7 @@ class RequestBuilder extends RequestBuilderBase {
    * @return \Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface
    *   The capture request.
    */
-  protected function createCaptureRequest(CreateCaptureInterface $request) : CreateCaptureInterface {
+  protected function createCaptureRequest($request) {
     $balance = $this->order->getBalance();
 
     $request->setCapturedAmount((int) $balance->multiply('100')->getNumber());
@@ -67,10 +69,10 @@ class RequestBuilder extends RequestBuilderBase {
   /**
    * Creates update/create session object.
    *
-   * @param \KlarnaPayments\Data\Payment\Session $session
+   * @param \KlarnaPayments\Data\Payment\Session\Session $session
    *   The request.
    *
-   * @return \KlarnaPayments\Data\Payment\Session
+   * @return \KlarnaPayments\Data\Payment\Session\Session
    *   The request.
    *
    * @todo Support shipping fees.
@@ -104,10 +106,10 @@ class RequestBuilder extends RequestBuilderBase {
       // Collect taxes only if enabled.
       if ($this->hasTaxesIncluded()) {
         // Calculate total tax amount.
-        $totalTax += $orderLine->getTotalTaxAmount();
+        $totalTax += $orderLine->getTotalTaxAmount()->getNumber();
       }
     }
-    $session->setOrderTaxAmount($totalTax);
+    $session->setOrderTaxAmount(new Amount($totalTax, $session->getPurchaseCurrency()));
 
     // Inspect order adjustments to include shipping fees.
     foreach ($this->order->getAdjustments() as $orderAdjustment) {
@@ -157,19 +159,18 @@ class RequestBuilder extends RequestBuilderBase {
    * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
    *   The order item to create order line from.
    *
-   * @return \KlarnaPayments\Data\Payment\OrderLine
+   * @return \KlarnaPayments\Data\Payment\Session\OrderLine
    *   The order line item.
    */
   protected function createOrderLine(OrderItemInterface $item) : OrderLine {
     $unitPrice = UnitBridge::toAmount($item->getAdjustedUnitPrice());
+    $totalPrice = UnitBridge::toAmount($item->getTotalPrice());
 
     $orderItem = (new OrderLine())
       ->setName((string) $item->getTitle())
       ->setQuantity((int) $item->getQuantity())
       ->setUnitPrice($unitPrice)
-      ->setTotalAmount(
-        new Amount($unitPrice->getNumber() * $item->getQuantity(), $unitPrice->getCurrency())
-      );
+      ->setTotalAmount($totalPrice);
 
     foreach ($item->getAdjustments() as $adjustment) {
       // Only tax adjustments are supported by default.
@@ -193,7 +194,7 @@ class RequestBuilder extends RequestBuilderBase {
   /**
    * Gets the billing address.
    *
-   * @return \KlarnaPayments\Data\Payment\ContactAddress|null
+   * @return \KlarnaPayments\Data\Payment\Session\ContactAddress|null
    *   The billing address or null.
    */
   protected function getBillingAddress() : ? ContactAddress {
@@ -250,16 +251,16 @@ class RequestBuilder extends RequestBuilderBase {
   /**
    * Generates place order request object.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface $request
+   * @param \KlarnaPayments\Data\Payment\Session\Session $session
    *   The authorization request.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\Payment\AuthorizationRequestInterface
+   * @return \KlarnaPayments\Data\Payment\Session\Session
    *   The request.
    */
-  protected function createPlaceRequest(AuthorizationRequestInterface $request) : AuthorizationRequestInterface {
-    $request = $this->createUpdateRequest($request);
+  protected function createPlaceRequest(Session $session) : Session {
+    $session = $this->createUpdateRequest($session);
 
-    $this->validate($request, [
+    $this->validate($session, [
       'purchase_country',
       'purchase_currency',
       'locale',
@@ -268,18 +269,18 @@ class RequestBuilder extends RequestBuilderBase {
       'merchant_urls',
       'billing_address',
     ]);
-    return $request;
+    return $session;
   }
 
   /**
    * Validates the requests.
    *
-   * @param \Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface $request
+   * @param \KlarnaPayments\Data\Payment\Session\Session $request
    *   The request.
    * @param array $required
    *   Required fields.
    */
-  protected function validate(RequestInterface $request, array $required) : void {
+  protected function validate(Session $request, array $required) : void {
     $values = $request->toArray();
 
     $missing = array_filter($required, function ($key) use ($values) {
@@ -287,7 +288,7 @@ class RequestBuilder extends RequestBuilderBase {
     });
 
     if (count($missing) > 0) {
-      throw new \InvalidArgumentException(sprintf('Missing required values: %s', implode(',', $missing)));
+      throw new InvalidArgumentException(sprintf('Missing required values: %s', implode(',', $missing)));
     }
   }
 

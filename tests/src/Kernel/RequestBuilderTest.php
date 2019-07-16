@@ -51,7 +51,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
   }
 
   /**
-   * @covers ::generateRequest
+   * @covers ::createObject
    * @covers ::createUpdateRequest
    * @dataProvider withoutTaxesDataProvider
    */
@@ -74,7 +74,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $order->save();
 
     $sut = $this->sut->withOrder($order);
-    $request = $sut->generateRequest('create');
+    $request = $sut->createObject('create');
 
     $this->assertTrue($request instanceof RequestInterface);
     $this->assertEquals($expected, $request->toArray());

@@ -6,10 +6,9 @@ namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
-use Drupal\commerce_klarna_payments\Klarna\Data\Order\CreateCaptureInterface;
-use Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface;
 use Drupal\commerce_klarna_payments\Klarna\Service\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
+use KlarnaPayments\Data\Payment\Session\Session;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -37,15 +36,15 @@ final class RequestSubscriber implements EventSubscriberInterface {
    * @param string $type
    *   The type.
    *
-   * @return \Drupal\commerce_klarna_payments\Klarna\Data\RequestInterface
+   * @return \KlarnaPayments\Data\Payment\Session\Session
    *   The request.
    */
-  private function buildRequest(OrderInterface $order, string $type) : RequestInterface {
-    $request = $this->builder
+  private function buildObject(OrderInterface $order, string $type) : Session {
+    $session = $this->builder
       ->withOrder($order)
-      ->generateRequest($type);
+      ->createObject($type);
 
-    return $request;
+    return $session;
   }
 
   /**
@@ -55,11 +54,11 @@ final class RequestSubscriber implements EventSubscriberInterface {
    *   The event to respond to.
    */
   public function onCaptureCreate(RequestEvent $event) {
-    if (!$event->getRequest() instanceof CreateCaptureInterface) {
-      $request = $this->buildRequest($event->getOrder(), 'capture');
+    /*if (!$event->getRequest() instanceof CreateCaptureInterface) {
+      $request = $this->buildObject($event->getOrder(), 'capture');
 
       $event->setRequest($request);
-    }
+    }*/
   }
 
   /**
@@ -69,10 +68,10 @@ final class RequestSubscriber implements EventSubscriberInterface {
    *   The event to respond to.
    */
   public function onOrderCreate(RequestEvent $event) {
-    if (!$event->getRequest() instanceof RequestInterface) {
-      $request = $this->buildRequest($event->getOrder(), 'place');
+    if (!$event->getObject() instanceof Session) {
+      $session = $this->buildObject($event->getOrder(), 'place');
 
-      $event->setRequest($request);
+      $event->setObject($session);
     }
   }
 
@@ -83,11 +82,10 @@ final class RequestSubscriber implements EventSubscriberInterface {
    *   The event to respond to.
    */
   public function onSessionCreate(RequestEvent $event) {
-    if (!$event->getRequest() instanceof RequestInterface) {
-      /** @var \Drupal\commerce_klarna_payments\Klarna\Request\Payment\Request $request */
-      $request = $this->buildRequest($event->getOrder(), 'create');
+    if (!$event->getObject() instanceof Session) {
+      $session = $this->buildObject($event->getOrder(), 'create');
 
-      $event->setRequest($request);
+      $event->setObject($session);
     }
   }
 

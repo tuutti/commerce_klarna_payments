@@ -12,6 +12,8 @@ use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
+use Exception;
+use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -100,7 +102,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     $order = $event->getEntity();
 
     // This should only be triggered when the order is being completed.
-    if ($event->getToState()->getId() !== 'completed') {
+    if ($event->getTransition()->getToState()->getId() !== 'completed') {
       return;
     }
 
@@ -113,7 +115,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     try {
       $this->connector->getPlugin($order);
     }
-    catch (\InvalidArgumentException $e) {
+    catch (InvalidArgumentException $e) {
       // Non-klarna order.
       return;
     }
@@ -133,7 +135,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
 
           return;
         }
-        throw new \InvalidArgumentException('Payment not found.');
+        throw new InvalidArgumentException('Payment not found.');
       }
       /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
       $request = $this->eventDispatcher
@@ -149,7 +151,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
         ->setRemoteId($capture['capture_id'])
         ->save();
     }
-    catch (\Exception $e) {
+    catch (Exception $e) {
       $this->logger->critical(new TranslatableMarkup('Payment capture for order @order failed: @message', [
         '@order' => $event->getEntity()->id(),
         '@message' => $e->getMessage(),
@@ -174,7 +176,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     try {
       $this->connector->getPlugin($order);
     }
-    catch (\InvalidArgumentException $e) {
+    catch (InvalidArgumentException $e) {
       // Non-klarna order.
       return;
     }
@@ -189,7 +191,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
         ]);
       }
     }
-    catch (\Exception $e) {
+    catch (Exception $e) {
       $this->logger->warning(new TranslatableMarkup('Setting Klarna order number failed for order @order: @message', [
         '@order' => $order->id(),
         '@message' => $e->getMessage(),

@@ -47,16 +47,16 @@ class DefaultLocaleResolver implements LocaleResolverInterface {
     $locale = strtolower($locale);
 
     $map = [
-      'fi' => 'fi-fi',
-      'sv' => 'sv-sv',
-      'nb' => 'nb-no',
-      'nn' => 'nn-no',
-      'de' => 'de-de',
+      'fi' => 'fi-FI',
+      'sv' => 'sv-SV',
+      'nb' => 'nb-NO',
+      'nn' => 'nn-NO',
+      'de' => 'de-DE',
       // Drupal does not define these by default.
-      'at' => 'de-at',
+      'at' => 'de-AT',
     ];
 
-    return $map[$locale] ?? 'en-us';
+    return $map[$locale] ?? 'en-US';
   }
 
 }

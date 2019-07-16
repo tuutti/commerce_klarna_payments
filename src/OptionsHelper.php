@@ -5,7 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments;
 
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
-use KlarnaPayments\Data\Payment\Options;
+use KlarnaPayments\Data\Payment\Session\Options;
 
 /**
  * Provides a helper trait for Klarna's options setting.
@@ -61,7 +61,7 @@ trait OptionsHelper {
   /**
    * Gets the options object.
    *
-   * @return \KlarnaPayments\Data\Payment\Options
+   * @return \KlarnaPayments\Data\Payment\Session\Options
    *   The options.
    */
   protected function getOptions() : Options {
