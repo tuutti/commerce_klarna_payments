@@ -38,6 +38,7 @@ use Webmozart\Assert\Assert;
  *    forms = {
  *     "offsite-payment" = "Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect\KlarnaOffsiteForm",
  *   },
+ *   requires_billing_information = FALSE
  * )
  */
 final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface {

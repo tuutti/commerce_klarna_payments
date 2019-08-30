@@ -49,6 +49,7 @@ cd $BASE_DIR
 git clone --depth 1 --branch "$DRUPAL_CORE" http://git.drupal.org/project/drupal.git
 cd drupal
 
+composer self-update
 # Add drupal composer repositories.
 composer config repositories.0 path $CI_PROJECT_DIR
 composer config repositories.1 composer https://packages.drupal.org/8
