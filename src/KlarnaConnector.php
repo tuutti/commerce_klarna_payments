@@ -11,8 +11,9 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use GuzzleHttp\Exception\ClientException;
 use InvalidArgumentException;
 use Klarna\Rest\OrderManagement\Order;
-use Klarna\Rest\Transport\Connector;
+use Klarna\Rest\Transport\ConnectorInterface;
 use Klarna\Rest\Transport\Exception\ConnectorException;
+use Klarna\Rest\Transport\GuzzleConnector;
 use Klarna\Rest\Transport\UserAgent;
 use KlarnaPayments\Exception\FraudException;
 use KlarnaPayments\Request\Payment\Order\OrderRequest;
@@ -46,10 +47,10 @@ final class KlarnaConnector {
    *
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
    *   The event dispatcher.
-   * @param \Klarna\Rest\Transport\Connector|null $connector
+   * @param \Klarna\Rest\Transport\ConnectorInterface|null $connector
    *   The connector.
    */
-  public function __construct(EventDispatcherInterface $eventDispatcher, Connector $connector = NULL) {
+  public function __construct(EventDispatcherInterface $eventDispatcher, ConnectorInterface $connector = NULL) {
     $this->eventDispatcher = $eventDispatcher;
     $this->connector = $connector;
   }
@@ -60,16 +61,16 @@ final class KlarnaConnector {
    * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
    *   The plugin.
    *
-   * @return \Klarna\Rest\Transport\Connector
+   * @return \Klarna\Rest\Transport\ConnectorInterface
    *   The connector.
    */
-  protected function getConnector(Klarna $plugin) : Connector {
+  protected function getConnector(Klarna $plugin) : ConnectorInterface {
     if (!$this->connector) {
       $ua = (new UserAgent())
         ->setField('Library', 'drupal-klarna-payments-v1');
 
       // Populate default connector.
-      $this->connector = Connector::create(
+      $this->connector = GuzzleConnector::create(
         $plugin->getUsername(),
         $plugin->getPassword(),
         $plugin->getApiUri(),
