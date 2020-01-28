@@ -4,29 +4,30 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments;
 
+use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
+use Drupal\commerce_klarna_payments\Exception\FraudException;
+use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_price\Price;
 use GuzzleHttp\Exception\ClientException;
 use InvalidArgumentException;
+use Klarna\Rest\OrderManagement\Capture;
 use Klarna\Rest\OrderManagement\Order;
+use Klarna\Rest\Payments\Orders;
+use Klarna\Rest\Payments\Sessions;
 use Klarna\Rest\Transport\ConnectorInterface;
 use Klarna\Rest\Transport\Exception\ConnectorException;
 use Klarna\Rest\Transport\GuzzleConnector;
 use Klarna\Rest\Transport\UserAgent;
-use KlarnaPayments\Exception\FraudException;
-use KlarnaPayments\Request\Payment\Order\OrderRequest;
-use KlarnaPayments\Request\Payment\Session\SessionRequest;
-use KlarnaPayments\Response\Payment\Order\AuthorizationResponse;
-use KlarnaPayments\Response\Payment\Session\SessionResponse;
-use LogicException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Provides a service to interact with Klarna.
  */
-final class KlarnaConnector {
+final class Connector {
 
   /**
    * The event dispatcher.
@@ -98,13 +99,13 @@ final class KlarnaConnector {
     $plugin = $gateway->first()->entity->getPlugin();
 
     if (!$plugin instanceof Klarna) {
-      throw new InvalidArgumentException('Payment gateway not instanceof Klarna.');
+      throw new NonKlarnaOrderException('Payment gateway not instanceof Klarna.');
     }
     return $plugin;
   }
 
   /**
-   * Gets the Klarna order for given order.
+   * Gets the Klarna order for given commerce order.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
@@ -135,6 +136,31 @@ final class KlarnaConnector {
   }
 
   /**
+   * Creates a capture for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Drupal\commerce_price\Price $amount
+   *   The amount.
+   *
+   * @return \Klarna\Rest\OrderManagement\Capture
+   *   The capture.
+   */
+  public function createCapture(OrderInterface $order, Price $amount) : Capture {
+    $orderRequest = $this->getOrder($order);
+    $request = $this->eventDispatcher
+      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order))
+      ->getData();
+
+    $request['captured_amount'] = UnitConverter::toAmount($amount);
+
+    $capture = $orderRequest->createCapture($request);
+    $capture->fetch();
+
+    return $capture;
+  }
+
+  /**
    * Authorizes the order.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -142,27 +168,23 @@ final class KlarnaConnector {
    * @param string $authorizeToken
    *   The authorize token.
    *
-   * @return \KlarnaPayments\Response\Payment\Order\AuthorizationResponse
+   * @return array
    *   The authorization response.
    */
-  public function authorizeOrder(OrderInterface $order, string $authorizeToken) : AuthorizationResponse {
+  public function authorizeOrder(OrderInterface $order, string $authorizeToken) : array {
     $plugin = $this->getPlugin($order);
 
-    /** @var \KlarnaPayments\Data\Payment\Order\Order $data */
     $data = $this->eventDispatcher
       ->dispatch(Events::ORDER_CREATE, new RequestEvent($order))
-      ->getObject();
+      ->getData();
 
-    if (!$data->getAuthorizationToken()) {
-      $data->setAuthorizationToken($authorizeToken);
-    }
-    $request = new OrderRequest($this->getConnector($plugin));
-    $response = $request->create($data);
+    $request = new Orders($this->getConnector($plugin), $authorizeToken);
+    $response = (array) $request->create($data);
 
-    if (!$response->isAccepted() && !$response->isPending()) {
+    if (!in_array($response['fraud_status'], ['ACCEPTED', 'PENDING'])) {
       throw new FraudException('Fraud validation failed.');
     }
-    $order->setData('klarna_order_id', $response->getOrderId())
+    $order->setData('klarna_order_id', $response['order_id'])
       ->save();
 
     return $response;
@@ -174,45 +196,51 @@ final class KlarnaConnector {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \KlarnaPayments\Response\Payment\Session\SessionResponse
+   * @return array
    *   The Klarna request data.
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
-  public function buildTransaction(OrderInterface $order) : SessionResponse {
+  public function buildTransaction(OrderInterface $order) : array {
     $plugin = $this->getPlugin($order);
 
     $session = $this->eventDispatcher
       ->dispatch(Events::SESSION_CREATE, new RequestEvent($order))
-      ->getObject();
+      ->getData();
 
     if (!$session) {
-      throw new LogicException('Session is not set.');
+      throw new InvalidArgumentException('Session is not set.');
     }
-
-    $sessionRequest = new SessionRequest($this->getConnector($plugin));
-    // Attempt to use already stored session id.
-    $sessionId = $order->getData('klarna_session_id', NULL);
+    $sessionId      = $order->getData('klarna_session_id');
+    $connector      = $this->getConnector($plugin);
+    $sessionRequest = new Sessions($connector);
 
     try {
-      $sessionResponse = $sessionId ?
-        $sessionRequest->update($session, $sessionId) : $sessionRequest->create($session);
+      // Attempt to use already stored session id to update.
+      if ($sessionId) {
+        $sessionResponse = (array) (new Sessions($connector, $sessionId))
+          ->update($session)
+          ->fetch();
+      }
+      else {
+        $sessionResponse = (array) $sessionRequest->create($session);
+      }
     }
     catch (ConnectorException | ClientException $e) {
       // Attempt to create new session session if update failed.
       // This usually happens when we have an expired session id
       // saved in commerce order.
-      $sessionResponse = $sessionRequest->create($session);
+      $sessionResponse = (array) $sessionRequest->create($session);
     }
 
     // Session id will be reset when we update the session and
     // re-fetch. Update only if session id has changed.
-    if ($sessionId !== $sessionResponse->getSessionId()) {
-      $order->setData('klarna_session_id', $sessionResponse->getSessionId())
+    if ($sessionId !== $sessionResponse['session_id']) {
+      $order->setData('klarna_session_id', $sessionResponse['session_id'])
         ->save();
     }
 
-    return $sessionResponse;
+    return (array) $sessionResponse;
   }
 
 }

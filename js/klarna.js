@@ -25,7 +25,7 @@
       riot.mount('klarna', this);
     },
 
-    initialize: function(settings) {
+    initialize: function (settings) {
       this.settings = settings;
 
       Klarna.Payments.init({
@@ -33,7 +33,7 @@
       });
     },
 
-    load: function(method, data, callback) {
+    load: function (method, data, callback) {
       try {
         Klarna.Payments.load({
             container: '#klarna-payment-container-' + method,
@@ -51,7 +51,7 @@
       }
     },
 
-    reauthorize: function(method, data, callback) {
+    reauthorize: function (method, data, callback) {
       Klarna.Payments.reauthorize({
           payment_method_category: method,
         },
@@ -63,7 +63,7 @@
         });
     },
 
-    authorize: function(method, data, callback) {
+    authorize: function (method, data, callback) {
       Klarna.Payments.authorize({
         payment_method_category: method,
       },

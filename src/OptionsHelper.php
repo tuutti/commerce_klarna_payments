@@ -5,35 +5,11 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments;
 
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
-use KlarnaPayments\Data\Payment\Session\Options;
 
 /**
  * Provides a helper trait for Klarna's options setting.
  */
 trait OptionsHelper {
-
-  /**
-   * The payment plugin.
-   *
-   * @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   */
-  protected $plugin;
-
-  /**
-   * Gets the plugin configuration.
-   *
-   * @return array
-   *   The configuration.
-   */
-  protected function getPluginConfiguration() : array {
-    if ($this instanceof Klarna) {
-      return $this->getConfiguration();
-    }
-    if (!$this->plugin) {
-      throw new \LogicException('$this->plugin is not defined.');
-    }
-    return $this->plugin->getConfiguration();
-  }
 
   /**
    * List of default options.
@@ -61,12 +37,14 @@ trait OptionsHelper {
   /**
    * Gets the options object.
    *
-   * @return \KlarnaPayments\Data\Payment\Session\Options
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The payment plugin.
+   *
+   * @return array
    *   The options.
    */
-  protected function getOptions() : Options {
-    $options = new Options();
-    return $options->populateFromArray($this->getPluginConfiguration()['options']);
+  protected function getOptions(Klarna $plugin) : array {
+    return array_filter($plugin->getConfiguration()['options']);
   }
 
 }

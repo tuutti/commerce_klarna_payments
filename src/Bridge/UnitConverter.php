@@ -2,19 +2,18 @@
 
 declare(strict_types = 1);
 
-namespace Drupal\commerce_klarna_payments\Klarna\Bridge;
+namespace Drupal\commerce_klarna_payments\Bridge;
 
 use Drupal\commerce_price\Calculator;
 use Drupal\commerce_price\Price;
-use KlarnaPayments\Data\Amount;
 
 /**
  * Bridge between KlarnaPayment and commerces various units.
  *
- * - \KlarnaPayments\Data\Amount <-> \Drupal\commerce_price\Price.
- * - Tax rate <-> Tax percentage.
+ * - Amount(int) <-> \Drupal\commerce_price\Price.
+ * - Tax rate(int) <-> Commerce tax percentage.
  */
-final class UnitBridge {
+final class UnitConverter {
 
   /**
    * Converts commerce price to Klarna "amount".
@@ -22,13 +21,13 @@ final class UnitBridge {
    * @param \Drupal\commerce_price\Price $price
    *   The price to convert.
    *
-   * @return \KlarnaPayments\Data\Amount
+   * @return int
    *   The amount.
    */
-  public static function toAmount(Price $price) : Amount {
+  public static function toAmount(Price $price) : int {
     $value = (int) $price->multiply('100')->getNumber();
 
-    return new Amount($value, $price->getCurrencyCode());
+    return $value;
   }
 
   /**
@@ -47,18 +46,20 @@ final class UnitBridge {
   /**
    * Converts Klarna "amount" to commerce price.
    *
-   * @param \KlarnaPayments\Data\Amount $amount
+   * @param int $amount
    *   The klarna amount.
+   * @param string $currency
+   *   The currency.
    *
    * @return \Drupal\commerce_price\Price
    *   The commerce price.
    */
-  public static function toPrice(Amount $amount) : Price {
+  public static function toPrice(int $amount, string $currency) : Price {
     // Divide Klarna price by 100 to get commerce compatible
     // price.
-    $value = Calculator::divide($amount->getNumber(), '100');
+    $value = Calculator::divide((string) $amount, '100');
 
-    return new Price($value, $amount->getCurrency());
+    return new Price($value, $currency);
   }
 
 }

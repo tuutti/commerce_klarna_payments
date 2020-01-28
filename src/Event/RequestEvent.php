@@ -5,25 +5,41 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Event;
 
 use Drupal\commerce_order\Entity\OrderInterface;
-use KlarnaPayments\Data\Payment\Session\Session;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
- * Event to store session data.
+ * Event to store request data.
  */
 final class RequestEvent extends Event {
 
-  protected $order;
-  protected $object;
+  /**
+   * The order.
+   *
+   * @var \Drupal\commerce_order\Entity\OrderInterface
+   */
+  private $order;
+
+  /**
+   * The session data.
+   *
+   * @var array
+   */
+  private $data = [];
 
   /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   * @param array $data
+   *   The data.
    */
-  public function __construct(OrderInterface $order) {
+  public function __construct(OrderInterface $order, array $data = []) {
     $this->order = clone $order;
+
+    if ($data) {
+      $this->data = $data;
+    }
   }
 
   /**
@@ -39,25 +55,25 @@ final class RequestEvent extends Event {
   /**
    * Sets the session data.
    *
-   * @param \KlarnaPayments\Data\Payment\Session\Session|\KlarnaPayments\Data\Payment\Order\Order $object
+   * @param array $data
    *   The session data.
    *
    * @return $this
    *   The self.
    */
-  public function setObject(Session $object) : self {
-    $this->object = $object;
+  public function setData(array $data) : self {
+    $this->data = $data;
     return $this;
   }
 
   /**
-   * Gets the request.
+   * Gets the session data.
    *
-   * @return \KlarnaPayments\Data\Payment\Session\Session|\KlarnaPayments\Data\Payment\Order\Order
+   * @return array
    *   The session/order data.
    */
-  public function getObject() : ? Session {
-    return $this->object;
+  public function getData() : array {
+    return $this->data;
   }
 
 }

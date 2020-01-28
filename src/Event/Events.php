@@ -30,4 +30,9 @@ final class Events {
    */
   public const CAPTURE_CREATE = 'commerce_klarna_payments.capture_create';
 
+  /**
+   * An event ran when we release the remaining authorizations.
+   */
+  public const RELEASE_REMAINING_AUTHORIZATION = 'commerce_klarna_payments.release_remaining_authorization';
+
 }

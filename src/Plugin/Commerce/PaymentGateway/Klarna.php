@@ -4,9 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_klarna_payments\Event\Events;
-use Drupal\commerce_klarna_payments\Event\RequestEvent;
-use Drupal\commerce_klarna_payments\KlarnaConnector;
+use Drupal\commerce_klarna_payments\Connector;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -24,9 +22,7 @@ use Drupal\Core\Url;
 use Klarna\Rest\Transport\ConnectorInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
-use Webmozart\Assert\Assert;
 
 /**
  * Provides the Klarna payments payment gateway.
@@ -60,16 +56,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   protected const REGION_NA = 'na';
 
   /**
-   * The event dispatcher.
-   *
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
-   */
-  protected $eventDispatcher;
-
-  /**
    * The klarna connector.
    *
-   * @var \Drupal\commerce_klarna_payments\KlarnaConnector
+   * @var \Drupal\commerce_klarna_payments\Connector
    */
   protected $connector;
 
@@ -91,9 +80,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     PaymentTypeManager $payment_type_manager,
     PaymentMethodTypeManager $payment_method_type_manager,
     TimeInterface $time,
-    EventDispatcherInterface $eventDispatcher,
     LoggerInterface $logger,
-    KlarnaConnector $connector
+    Connector $connector
   ) {
     parent::__construct(
       $configuration,
@@ -105,7 +93,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       $time
     );
 
-    $this->eventDispatcher = $eventDispatcher;
     $this->connector = $connector;
     $this->logger = $logger;
   }
@@ -122,7 +109,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       $container->get('plugin.manager.commerce_payment_type'),
       $container->get('plugin.manager.commerce_payment_method_type'),
       $container->get('datetime.time'),
-      $container->get('event_dispatcher'),
       $container->get('logger.channel.commerce_klarna_payments'),
       $container->get('commerce_klarna_payments.connector')
     );
@@ -144,10 +130,10 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * Gets the Klarna connector.
    *
-   * @return \Drupal\commerce_klarna_payments\KlarnaConnector
+   * @return \Drupal\commerce_klarna_payments\Connector
    *   The connector.
    */
-  public function getKlarnaConnector() : KlarnaConnector {
+  public function getConnector() : Connector {
     return $this->connector;
   }
 
@@ -208,7 +194,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    *   The entity id.
    */
   public function getEntityId() : string {
-    return $this->entityId;
+    return $this->parentEntity->id();
   }
 
   /**
@@ -228,7 +214,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $arguments = array_merge($arguments, [
       'step' => 'payment',
       'commerce_order' => $order->id(),
-      'commerce_payment_gateway' => $this->entityId,
+      'commerce_payment_gateway' => $this->getEntityId(),
     ]);
 
     return (new Url($routeName, $arguments, ['absolute' => TRUE]))
@@ -308,22 +294,17 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    */
   public function onReturn(OrderInterface $order, Request $request) {
     try {
-      $klarnaOrder = $this->connector->getOrder($order);
+      $orderResponse = $this->connector->getOrder($order);
     }
     catch (\Exception $e) {
-      throw new PaymentGatewayException();
+      throw new PaymentGatewayException($e->getMessage());
     }
 
-    try {
-      Assert::oneOf($klarnaOrder['status'], [
-        'AUTHORIZED',
-        'PART_CAPTURED',
-        'CAPTURED',
-      ]);
-    }
-    catch (\InvalidArgumentException $e) {
+    $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
+
+    if (!in_array($orderResponse['status'], $allowed)) {
       throw new PaymentGatewayException($this->t('Order is in invalid state [@state]', [
-        '@state' => $klarnaOrder['status'],
+        '@state' => $orderResponse['status'],
       ]));
     }
     $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
@@ -331,18 +312,20 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
     $payment = $payment_storage->create([
       'amount' => $order->getTotalPrice(),
-      'payment_gateway' => $this->entityId,
+      'payment_gateway' => $this->parentEntity->id(),
       'order_id' => $order->id(),
-      'test' => $this->getMode() == 'test',
+      'test' => !$this->isLive(),
     ]);
 
-    $transition = $payment->getState()->getWorkflow()->getTransition('authorize');
+    $transition = $payment->getState()
+      ->getWorkflow()
+      ->getTransition('authorize');
     $payment->getState()->applyTransition($transition);
 
     $payment->setAuthorizedTime($this->time->getRequestTime())
       ->save();
 
-    $klarnaOrder->acknowledge();
+    $orderResponse->acknowledge();
   }
 
   /**
@@ -354,17 +337,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $amount = $amount ?: $payment->getAmount();
 
     $order = $payment->getOrder();
-    $klarnaOrder = $this->connector->getOrder($order);
-
-    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
-    $request = $this->eventDispatcher
-      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order));
 
     try {
-      $request->getRequest()
-        ->setCapturedAmount((int) $amount->multiply('100')->getNumber());
-      $capture = $klarnaOrder->createCapture($request->getRequest()->toArray());
-      $capture->fetch();
+      $capture = $this->connector->createCapture($order, $amount);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);

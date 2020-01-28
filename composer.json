@@ -12,7 +12,6 @@
   },
   "require": {
     "php": ">=7.1",
-    "tuutti/klarna-payments-php": "dev-master",
     "webmozart/assert": "*",
     "drupal/commerce": "^2"
   }
