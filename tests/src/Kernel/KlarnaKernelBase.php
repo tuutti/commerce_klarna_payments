@@ -10,12 +10,16 @@ use Drupal\Tests\commerce\Kernel\CommerceKernelTestBase;
  */
 abstract class KlarnaKernelBase extends CommerceKernelTestBase {
 
+  /**
+   * {@inheritdoc}
+   */
   public static $modules = [
     'entity_reference_revisions',
     'profile',
     'path',
     'state_machine',
     'commerce_product',
+    'commerce_number_pattern',
     'commerce_order',
     'commerce_payment',
     'commerce_checkout',
@@ -43,6 +47,7 @@ abstract class KlarnaKernelBase extends CommerceKernelTestBase {
     $this->installEntitySchema('commerce_product_variation');
     $this->installConfig(['commerce_product', 'commerce_order']);
     $this->installConfig('commerce_payment');
+    $this->installSchema('commerce_number_pattern', ['commerce_number_pattern_sequence']);
 
     $this->gateway = PaymentGateway::create([
       'id' => 'klarna_payments',

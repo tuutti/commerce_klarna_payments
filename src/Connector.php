@@ -89,8 +89,10 @@ final class Connector {
    *
    * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
    *   The payment plugin.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
-  public function getPlugin(OrderInterface $order) : Klarna {
+  public function getPlugin(OrderInterface $order) : ? Klarna {
     $gateway = $order->get('payment_gateway');
 
     if ($gateway->isEmpty()) {
@@ -112,6 +114,8 @@ final class Connector {
    *
    * @return \Klarna\Rest\OrderManagement\Order
    *   The klarna order.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getOrder(OrderInterface $order) : Order {
     $plugin = $this->getPlugin($order);
@@ -146,18 +150,52 @@ final class Connector {
    * @return \Klarna\Rest\OrderManagement\Capture
    *   The capture.
    */
-  public function createCapture(OrderInterface $order, Price $amount) : Capture {
+  public function createCapture(OrderInterface $order, Price $amount = NULL) : Capture {
     $orderRequest = $this->getOrder($order);
     $request = $this->eventDispatcher
       ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order))
       ->getData();
 
-    $request['captured_amount'] = UnitConverter::toAmount($amount);
+    if ($amount) {
+      $request['captured_amount'] = UnitConverter::toAmount($amount);
+    }
 
     $capture = $orderRequest->createCapture($request);
     $capture->fetch();
 
     return $capture;
+  }
+
+  /**
+   * Releases the remaining authorizations for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order to release authorizations.
+   */
+  public function releaseRemainingAuthorization(OrderInterface $order) : void {
+    $request = $this->getOrder($order);
+    $request->fetch();
+
+    $this->eventDispatcher
+      ->dispatch(Events::RELEASE_REMAINING_AUTHORIZATION, new RequestEvent($order, (array) $request));
+
+    $request->releaseRemainingAuthorization();
+  }
+
+  /**
+   * Voids payment for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   */
+  public function voidPayment(OrderInterface $order) : void {
+    $this->eventDispatcher
+      ->dispatch(Events::VOID_PAYMENT, new RequestEvent($order));
+
+    $request = $this->getOrder($order);
+    // @todo Find out, if a DELETE /payments/v1/authorizations/{authorizationToken}
+    // request would be better here.
+    $request->cancel();
   }
 
   /**

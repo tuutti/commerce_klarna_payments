@@ -47,7 +47,13 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
 
       return $form;
     }
-    $form = $this->buildRedirectForm($form, $form_state, $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect'));
+
+    $form = $this
+      ->buildRedirectForm(
+        $form,
+        $form_state,
+        $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect')
+      );
 
     try {
       $data = $plugin
@@ -77,8 +83,6 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
         // Trigger a form error so we can disable continue button.
         $form_state->setErrorByName('klarna_authorization_token');
       }
-
-      return $form;
     }
     catch (ConnectorException $e) {
       // Session initialization failed.
@@ -88,13 +92,12 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
 
       $plugin->getLogger()
         ->error(
-          $this->t('Failed to populate Klara order #@id: @message', [
+          $this->t('Failed to populate Klara order #@id: [@exception]: @message', [
             '@id' => $order->id(),
+            '@exception' => get_class($e),
             '@message' => $e->getMessage(),
           ])
       );
-
-      return $form;
     }
     catch (Exception $e) {
       $this->messenger()->addError(
@@ -103,14 +106,15 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
 
       $plugin->getLogger()
         ->error(
-          $this->t('An error occurred for order #@id: @message', [
+          $this->t('An error occurred for order #@id: [@exception]: @message', [
             '@id' => $order->id(),
+            '@exception' => get_class($e),
             '@message' => $e->getMessage(),
           ])
         );
-
-      return $form;
     }
+
+    return $form;
   }
 
   /**

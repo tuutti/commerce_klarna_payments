@@ -2,114 +2,147 @@
 
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
-use Drupal\commerce_klarna_payments\Klarna\Data\Payment\RequestInterface;
-use Drupal\commerce_order\Entity\Order;
-use Drupal\commerce_order\Entity\OrderItem;
-use Drupal\commerce_order\Entity\OrderItemType;
-use Drupal\commerce_price\Price;
+use Drupal\profile\Entity\Profile;
 
 /**
  * Request builder tests.
  *
  * @group commerce_klarna_paymnents
- * @coversDefaultClass \Drupal\commerce_klarna_payments\Klarna\Service\Payment\RequestBuilder
+ * @coversDefaultClass \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
  */
-class RequestBuilderTest extends KlarnaKernelBase {
-
-  /**
-   * The request builder.
-   *
-   * @var \Drupal\commerce_klarna_payments\Klarna\Service\Payment\RequestBuilder
-   */
-  protected $sut;
-
-  /**
-   * A sample user.
-   *
-   * @var \Drupal\user\UserInterface
-   */
-  protected $user;
+class RequestBuilderTest extends RequestBuilderTestBase {
 
   /**
    * {@inheritdoc}
    */
-  protected function setUp() {
+  public static $modules = ['address'];
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
     parent::setUp();
 
-    // An order item type that doesn't need a purchasable entity, for
-    // simplicity.
-    OrderItemType::create([
-      'id' => 'test',
-      'label' => 'Test',
-      'orderType' => 'default',
-    ])->save();
-
-    $user = $this->createUser();
-    $this->user = $this->reloadEntity($user);
-
-    $this->sut = $this->container->get('commerce_klarna_payments.request_builder');
+    $this->installConfig('address');
   }
 
   /**
-   * @covers ::createObject
-   * @covers ::createUpdateRequest
-   * @dataProvider withoutTaxesDataProvider
-   */
-  public function testCreateWithoutTaxes(array $expected) {
-    /** @var \Drupal\commerce_order\Entity\OrderItemInterface $order_item */
-    $order_item = OrderItem::create([
-      'type' => 'test',
-      'quantity' => '1',
-      'unit_price' => new Price('2.00', 'USD'),
-    ]);
-    $order_item->save();
-    $order_item = $this->reloadEntity($order_item);
-    $order = Order::create([
-      'type' => 'default',
-      'state' => 'completed',
-      'payment_gateway' => $this->gateway->id(),
-    ]);
-    $order->setStore($this->store);
-    $order->addItem($order_item);
-    $order->save();
-
-    $sut = $this->sut->withOrder($order);
-    $request = $sut->createObject('create');
-
-    $this->assertTrue($request instanceof RequestInterface);
-    $this->assertEquals($expected, $request->toArray());
-  }
-
-  /**
-   * Data provider for testCreateWithoutTaxes().
+   * Gets the expected data.
    *
    * @return array
    *   The data.
    */
-  public function withoutTaxesDataProvider() {
+  private function getExpected() : array {
     return [
-      [
+      'purchase_country' => 'US',
+      'purchase_currency' => 'USD',
+      'locale' => 'en-US',
+      'merchant_urls' => [
+        'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
+        'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
+      ],
+      'order_amount' => 200,
+      'order_lines' => [
         [
-          'purchase_country' => 'US',
-          'purchase_currency' => 'USD',
-          'locale' => 'en-us',
-          'merchant_urls' => [
-            'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
-            'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
-          ],
-          'order_amount' => 200,
-          'options' => NULL,
-          'order_lines' => [
-            [
-              'quantity' => 1,
-              'unit_price' => 200,
-              'total_amount' => 200,
-            ],
-          ],
-          'order_tax_amount' => 0,
+          'name' => 'Test',
+          'quantity' => 1,
+          'unit_price' => 200,
+          'total_amount' => 200,
         ],
       ],
+      'order_tax_amount' => 0,
     ];
+  }
+
+  /**
+   * Tests ::createUpdateRequest().
+   */
+  public function testCreateUpdateRequest() : void {
+    $request = $this->sut->createUpdateRequest([], $this->createOrder());
+    $this->assertEquals($this->getExpected(), $request);
+  }
+
+  /**
+   * Tests ::createPlaceRequest().
+   */
+  public function testCreatePlaceRequest() : void {
+    $request = $this->sut->createPlaceRequest([], $this->createOrder());
+    $this->assertEquals($this->getExpected(), $request);
+  }
+
+  /**
+   * Tests that options are set correctly.
+   */
+  public function testOptions() : void {
+    $options = [
+      'color_button' => '#FFFFFF',
+      'color_button_text' => '#FFFFFF',
+      'color_checkbox' => '#FFFFFF',
+      'color_checkbox_checkmark' => '#FFFFFF',
+      'color_header' => '#FFFFFF',
+      'color_link' => '#FFFFFF',
+      'color_border' => '#FFFFFF',
+      'color_border_selected' => '#FFFFFF',
+      'color_text' => '#FFFFFF',
+      'color_details' => '#FFFFFF',
+      'color_text_secondary' => '#FFFFFF',
+      'radius_border' => '5px',
+    ];
+    $this->gateway->setPluginConfiguration(['options' => $options])->save();
+
+    $request = $this->sut->createUpdateRequest([], $this->createOrder());
+    $this->assertEquals($options, $request['options']);
+  }
+
+  /**
+   * Tests ::createCaptureRequest().
+   */
+  public function testCreateCaptureRequest() : void {
+    $expected = [
+      'captured_amount' => 200,
+    ];
+    $expected['order_lines'] = $this->getExpected()['order_lines'];
+
+    $this->assertEquals($expected, $this->sut->createCaptureRequest([], $this->createOrder()));
+  }
+
+  /**
+   * Tests that billing profile is set.
+   */
+  public function testBillingAddress() : void {
+    $expected = $this->getExpected();
+
+    $profile = Profile::create([
+      'type' => 'customer',
+      'address' => [
+        'country_code' => 'FI',
+        'locality' => 'Järvenpää',
+        'postal_code' => '04400',
+        'address_line1' => 'Mannilantie 1',
+        'given_name' => 'Jorma',
+        'family_name' => 'Testaaja',
+      ],
+    ]);
+    $profile->save();
+    $order = $this->createOrder();
+    $order
+      ->setEmail('test@example.com')
+      ->setBillingProfile($profile)
+      ->save();
+
+    $expected += [
+      'billing_address' => [
+        'email' => 'test@example.com',
+        'family_name' => 'Testaaja',
+        'given_name' => 'Jorma',
+        'city' => 'Järvenpää',
+        'country' => 'FI',
+        'postal_code' => '04400',
+        'street_address' => 'Mannilantie 1',
+      ],
+    ];
+
+    $this->assertEquals($expected, $this->sut->createUpdateRequest([], $order));
   }
 
 }

@@ -25,9 +25,7 @@ final class UnitConverter {
    *   The amount.
    */
   public static function toAmount(Price $price) : int {
-    $value = (int) $price->multiply('100')->getNumber();
-
-    return $value;
+    return (int) $price->multiply('100')->getNumber();
   }
 
   /**

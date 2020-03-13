@@ -4,19 +4,17 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
-use Drupal\commerce_klarna_payments\Event\Events;
-use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Connector;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Exception;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -39,13 +37,6 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   protected $logger;
 
   /**
-   * The event dispatcher.
-   *
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
-   */
-  protected $eventDispatcher;
-
-  /**
    * The payment storage.
    *
    * @var \Drupal\commerce_payment\PaymentStorageInterface
@@ -59,15 +50,12 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    *   The Klarna connector.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
-   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
-   *   The event dispatcher.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
    */
-  public function __construct(Connector $connector, LoggerInterface $logger, EventDispatcherInterface $eventDispatcher, EntityTypeManagerInterface $entityTypeManager) {
+  public function __construct(Connector $connector, LoggerInterface $logger, EntityTypeManagerInterface $entityTypeManager) {
     $this->connector = $connector;
     $this->logger = $logger;
-    $this->eventDispatcher = $eventDispatcher;
     $this->paymentStorage = $entityTypeManager->getStorage('commerce_payment');
   }
 
@@ -93,54 +81,6 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Creates payment for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @throws \Drupal\Core\Entity\EntityStorageException
-   */
-  protected function createPaymentCapture(OrderInterface $order) : void {
-    $orderRequest = $this->connector->getOrder($order);
-
-    // No payment found. This usually happens when we have done a partial
-    // capture (manually).
-    if (!$payment = $this->getPayment($order)) {
-      $payments = $this->paymentStorage->loadMultipleByOrder($order);
-      $orderRequest->fetch();
-
-      // Release the remaining authorization in case we have at least
-      // one capture made already.
-      if (!empty($orderRequest['captures']) && !empty($payments)) {
-        $orderRequest->releaseRemainingAuthorization();
-
-        $this->eventDispatcher
-          ->dispatch(Events::RELEASE_REMAINING_AUTHORIZATION, new RequestEvent($order, (array) $orderRequest));
-
-        return;
-      }
-      throw new InvalidArgumentException('Payment not found.');
-    }
-    $captureData = $this->eventDispatcher
-      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order))
-      ->getData();
-
-    $capture = $orderRequest->createCapture($captureData);
-    $capture->fetch();
-
-    // Transition payment to captured state.
-    $transition = $payment->getState()
-      ->getWorkflow()
-      ->getTransition('capture');
-
-    $payment->getState()->applyTransition($transition);
-
-    $payment
-      ->setRemoteId($capture['capture_id'])
-      ->save();
-  }
-
-  /**
    * This method is called whenever the order is completed.
    *
    * @param \Drupal\state_machine\Event\WorkflowTransitionEvent $event
@@ -162,14 +102,49 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      $this->createPaymentCapture($order);
+      // No payment found. This usually happens when we have done a partial
+      // capture (manually).
+      if (!$payment = $this->getPayment($order)) {
+        $orderRequest = $this->connector->getOrder($order);
+        $orderRequest->fetch();
+
+        $payments = $this->paymentStorage->loadMultipleByOrder($order);
+
+        // Release the remaining authorization in case we have at least
+        // one capture made already, since we can't make new payments after
+        // the order is completed.
+        if (!empty($orderRequest['captures']) && !empty($payments)) {
+          $this->connector->releaseRemainingAuthorization($order);
+
+          return;
+        }
+        $this->logger->critical(
+          new FormattableMarkup('Release reamining authorization failed. Payment not found for #@id', [
+            '@id' => $order->id(),
+          ])
+        );
+        throw new InvalidArgumentException('Payment not found.');
+      }
+      $capture = $this->connector->createCapture($order);
+
+      // Transition payment to captured state.
+      $transition = $payment->getState()
+        ->getWorkflow()
+        ->getTransition('capture');
+
+      $payment->getState()->applyTransition($transition);
+
+      $payment
+        ->setRemoteId($capture['capture_id'])
+        ->save();
     }
     catch (NonKlarnaOrderException $e) {
       return;
     }
     catch (Exception $e) {
-      $this->logger->critical(new TranslatableMarkup('Payment capture for order @order failed: @message', [
+      $this->logger->critical(new TranslatableMarkup('Payment capture for order #@order failed: [@exception]: @message', [
         '@order' => $event->getEntity()->id(),
+        '@exception' => get_class($e),
         '@message' => $e->getMessage(),
       ]));
     }
@@ -192,8 +167,8 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     try {
       $orderRequest = $this->connector->getOrder($order);
 
+      // Set the order number only if it's not set yet.
       if (empty($orderRequest['merchant_reference1'])) {
-        // Set the order number.
         $orderRequest->updateMerchantReferences([
           'merchant_reference1' => $order->getOrderNumber(),
         ]);

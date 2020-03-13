@@ -9,14 +9,10 @@ use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
-use Drupal\commerce_payment\PaymentMethodTypeManager;
-use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotificationsInterface;
 use Drupal\commerce_price\Price;
-use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Klarna\Rest\Transport\ConnectorInterface;
@@ -72,46 +68,41 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function __construct(
-    array $configuration,
-    string $plugin_id,
-    $plugin_definition,
-    EntityTypeManagerInterface $entity_type_manager,
-    PaymentTypeManager $payment_type_manager,
-    PaymentMethodTypeManager $payment_method_type_manager,
-    TimeInterface $time,
-    LoggerInterface $logger,
-    Connector $connector
-  ) {
-    parent::__construct(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $entity_type_manager,
-      $payment_type_manager,
-      $payment_method_type_manager,
-      $time
-    );
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    /** @var self $instance */
+    $instance = parent::create($container, $configuration, $plugin_definition, $plugin_definition);
+    $instance->setConnector($container->get('commerce_klarna_payments.connector'))
+      ->setLogger($container->get('logger.channel.commerce_klarna_payments'));
 
-    $this->connector = $connector;
-    $this->logger = $logger;
+    return $instance;
   }
 
   /**
-   * {@inheritdoc}
+   * Sets the connector.
+   *
+   * @param \Drupal\commerce_klarna_payments\Connector $connector
+   *   The connector.
+   *
+   * @return $this
+   *   The self.
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-    return new static(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $container->get('entity_type.manager'),
-      $container->get('plugin.manager.commerce_payment_type'),
-      $container->get('plugin.manager.commerce_payment_method_type'),
-      $container->get('datetime.time'),
-      $container->get('logger.channel.commerce_klarna_payments'),
-      $container->get('commerce_klarna_payments.connector')
-    );
+  public function setConnector(Connector $connector) : self {
+    $this->connector = $connector;
+    return $this;
+  }
+
+  /**
+   * Sets the logger.
+   *
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The logger.
+   *
+   * @return $this
+   *   The self.
+   */
+  public function setLogger(LoggerInterface $logger) : self {
+    $this->logger = $logger;
+    return $this;
   }
 
   /**
@@ -303,9 +294,12 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
 
     if (!in_array($orderResponse['status'], $allowed)) {
-      throw new PaymentGatewayException($this->t('Order is in invalid state [@state]', [
-        '@state' => $orderResponse['status'],
-      ]));
+      throw new PaymentGatewayException(
+        $this->t('Order is in invalid state [@state], one of @expected expected.', [
+          '@state' => $orderResponse['status'],
+          '@expected' => implode(',', $allowed),
+        ])
+      );
     }
     $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
 
@@ -361,10 +355,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $order = $payment->getOrder();
 
     try {
-      $klarnaOrder = $this->connector->getOrder($order);
-      // @todo Find out, if a DELETE /payments/v1/authorizations/{authorizationToken}
-      // request would be better here.
-      $klarnaOrder->cancel();
+      $this->connector->voidPayment($order);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);

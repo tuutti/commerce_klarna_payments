@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Request\Payment;
 
+use Drupal\address\AddressInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
@@ -91,7 +92,7 @@ class RequestBuilder {
    * @return array
    *   The request data.
    *
-   * @todo Support shipping fees.
+   * @todo Support promotions.
    * @todo Figure out what to do when order is in PENDING state.
    */
   public function createUpdateRequest(array $session, OrderInterface $order) : array {
@@ -125,7 +126,7 @@ class RequestBuilder {
       $session['order_lines'][] = $orderLine;
 
       // Collect taxes only if enabled.
-      if ($this->hasTaxesIncluded($order)) {
+      if ($this->hasTaxesIncluded($order) && isset($orderLine['total_tax_amount'])) {
         // Calculate total tax amount.
         $totalTax += $orderLine['total_tax_amount'];
       }
@@ -265,19 +266,27 @@ class RequestBuilder {
     if (!$billingData = $order->getBillingProfile()) {
       return NULL;
     }
+
+    $data = [
+      'email' => $order->getEmail(),
+    ];
+
     /** @var \Drupal\address\AddressInterface $address */
     $address = $billingData->get('address')->first();
 
-    return array_filter([
-      'email' => $order->getEmail(),
-      'family_name' => $address->getFamilyName(),
-      'given_name' => $address->getGivenName(),
-      'city' => $address->getLocality(),
-      'country' => $address->getCountryCode(),
-      'postal_code' => $address->getPostalCode(),
-      'street_address' => $address->getAddressLine1(),
-      'street_address2' => $address->getAddressLine2(),
-    ]);
+    if ($address instanceof AddressInterface) {
+      $data += [
+        'family_name' => $address->getFamilyName(),
+        'given_name' => $address->getGivenName(),
+        'city' => $address->getLocality(),
+        'country' => $address->getCountryCode(),
+        'postal_code' => $address->getPostalCode(),
+        'street_address' => $address->getAddressLine1(),
+        'street_address2' => $address->getAddressLine2(),
+      ];
+    }
+
+    return array_filter($data);
   }
 
 }
