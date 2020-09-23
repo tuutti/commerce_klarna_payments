@@ -7,10 +7,8 @@ namespace Drupal\commerce_klarna_payments\Request\Payment;
 use Drupal\address\AddressInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\OptionsHelper;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
-use Drupal\commerce_price\Price;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\Model\Capture;
@@ -85,10 +83,11 @@ class RequestBuilder {
    * @todo Figure out what to do when order is in PENDING state.
    */
   public function createUpdateRequest(Session $session, OrderInterface $order) : Session {
-    $plugin = $this->getPaymentPlugin($order);
+    /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
+    $plugin = $order->payment_gateway->entity->getplugin();
 
-    if ($address = $order->getStore()->getAddress()) {
-      $session->setPurchaseCountry($address->getCountryCode());
+    if ($storeAddress = $order->getStore()->getAddress()) {
+      $session->setPurchaseCountry($storeAddress->getCountryCode());
     }
 
     $session
@@ -121,8 +120,7 @@ class RequestBuilder {
       $orderLine = $this->createOrderLine($item);
       $orderLines[] = $orderLine;
 
-      // Collect taxes only if enabled.
-      if ($this->hasTaxesIncluded($order) && $orderLine->getTotalTaxAmount() !== NULL) {
+      if ($orderLine->getTotalTaxAmount() !== NULL) {
         // Calculate total tax amount.
         $totalTax += $orderLine->getTotalTaxAmount();
       }
@@ -152,7 +150,9 @@ class RequestBuilder {
           $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
             ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
 
-          $totalTax += $shippingOrderItem->getTotalTaxAmount();
+          if ($shippingOrderItem->getTotalTaxAmount() !== NULL) {
+            $totalTax += $shippingOrderItem->getTotalTaxAmount();
+          }
         }
 
         $orderLines[] = $shippingOrderItem;
@@ -188,42 +188,6 @@ class RequestBuilder {
   }
 
   /**
-   * Gets the payment plugin for order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   *   The payment plugin.
-   */
-  protected function getPaymentPlugin(OrderInterface $order) : Klarna {
-    return $order->payment_gateway->entity->getPlugin();
-  }
-
-  /**
-   * Checks whether taxes are included in prices or not.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return bool
-   *   TRUE if taxes are included, FALSE if not.
-   */
-  protected function hasTaxesIncluded(OrderInterface $order) : bool {
-    static $taxesIncluded;
-
-    if ($taxesIncluded === NULL) {
-      if (!$order->getStore()->hasField('prices_include_tax')) {
-        $taxesIncluded = FALSE;
-
-        return FALSE;
-      }
-      $taxesIncluded = (bool) $order->getStore()->get('prices_include_tax');
-    }
-    return $taxesIncluded;
-  }
-
-  /**
    * Creates new order line.
    *
    * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
@@ -233,14 +197,11 @@ class RequestBuilder {
    *   The order line item.
    */
   protected function createOrderLine(OrderItemInterface $item) : OrdersorderLine {
-    $unitPrice = UnitConverter::toAmount($item->getAdjustedUnitPrice());
-    $totalPrice = UnitConverter::toAmount($item->getTotalPrice());
-
     $orderItem = (new OrdersorderLine())
       ->setName($item->getTitle())
       ->setQuantity((int) $item->getQuantity())
-      ->setUnitPrice($unitPrice)
-      ->setTotalAmount($totalPrice);
+      ->setUnitPrice(UnitConverter::toAmount($item->getAdjustedUnitPrice()))
+      ->setTotalAmount(UnitConverter::toAmount($item->getTotalPrice()));
 
     foreach ($item->getAdjustments(['tax']) as $adjustment) {
       if (!$percentage = $adjustment->getPercentage()) {

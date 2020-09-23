@@ -109,7 +109,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       // we have done a manual capture that didn't capture the full price.
       if (!$payment) {
         // Make a second payment in authorized state with remaining balance.
-        $payment = $plugin->createAuthorizationPayment($order);
+        $payment = $plugin->createPayment($order);
       }
 
       $plugin->capturePayment($payment);

@@ -97,7 +97,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   public function defaultConfiguration() {
     return [
       'mode' => 'test',
-      'locale' => 'automatic',
       'username' => '',
       'password' => '',
       'options' => [],
@@ -295,7 +294,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
           ])
         );
       }
-      $this->createAuthorizationPayment($order);
+      $this->createPayment($order);
       $this->apiManager->acknowledgeOrder($order, $orderResponse);
     }
     catch (\Exception $e) {
@@ -312,7 +311,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    * @return \Drupal\commerce_payment\Entity\PaymentInterface
    *   The payment.
    */
-  public function createAuthorizationPayment(OrderInterface $order) : PaymentInterface {
+  public function createPayment(OrderInterface $order) : PaymentInterface {
     $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
 
     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
