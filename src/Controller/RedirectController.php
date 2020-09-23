@@ -7,6 +7,7 @@ namespace Drupal\commerce_klarna_payments\Controller;
 use Drupal\commerce\Response\NeedsRedirectException;
 use Drupal\commerce_checkout\CheckoutOrderManager;
 use Drupal\commerce_klarna_payments\Exception\FraudException;
+use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Component\Utility\NestedArray;
@@ -14,7 +15,8 @@ use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
-use Klarna\Rest\Transport\Exception\ConnectorException;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Klarna\ApiException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -83,56 +85,27 @@ class RedirectController implements ContainerInjectionInterface {
     $values = NestedArray::getValue($query, ['payment_process', 'offsite_payment']);
 
     if (empty($values['klarna_authorization_token'])) {
-      $plugin->getLogger()->error(
-        $this->t('Authorization token not set for #@id', [
-          '@id' => $commerce_order->id(),
-        ])
-      );
-      $this->messenger->addError(
-        $this->t('Authorization token not set. This should only happen when Klarna order is incomplete.')
-      );
-
+      $message = $this->t('Authorization token not set. This should only happen when Klarna order is incomplete.');
       // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order);
+      $this->redirectOnFailure($commerce_order, $plugin, $message);
     }
 
     try {
       $response = $plugin
-        ->getConnector()
+        ->getApiManager()
         ->authorizeOrder($commerce_order, $values['klarna_authorization_token']);
 
-      throw new NeedsRedirectException($response['redirect_url']);
+      throw new NeedsRedirectException($response->getRedirectUrl());
     }
-    catch (\InvalidArgumentException | ConnectorException $e) {
-
-      $plugin->getLogger()->critical(
-        $this->t('Authorization validation failed for #@id: @message', [
-          '@id' => $commerce_order->id(),
-          '@message' => $e->getMessage(),
-        ])
-      );
-
-      $this->messenger->addError(
-        $this->t('Authorization validation failed. Please contact store administration if the problemn persists.')
-      );
-
+    catch (\InvalidArgumentException | ApiException $e) {
+      $message = $this->t('Authorization validation failed. Please contact store administration if the problemn persists.');
       // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order);
+      $this->redirectOnFailure($commerce_order, $plugin, $message, $e);
     }
     catch (FraudException $e) {
-      $plugin->getLogger()->critical(
-        $this->t('Fraudulent order validation failed for order #@id: @message', [
-          '@id' => $commerce_order->id(),
-          '@message' => $e->getMessage(),
-        ])
-      );
-
-      $this->messenger->addError(
-        $this->t('Fraudulent order detected. Please contact store administration if the problemn persists.')
-      );
-
+      $message = $this->t('Fraudulent order detected. Please contact store administration if the problemn persists.');
       // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order);
+      $this->redirectOnFailure($commerce_order, $plugin, $message, $e);
     }
   }
 
@@ -141,10 +114,31 @@ class RedirectController implements ContainerInjectionInterface {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   *
-   * @throws \Drupal\commerce\Response\NeedsRedirectException
+   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
+   *   The payment plugin.
+   * @param \Drupal\Core\StringTranslation\TranslatableMarkup $message
+   *   The error message.
+   * @param \Exception|null $exception
+   *   The exception if set.
    */
-  private function redirectOnFailure(OrderInterface $order) : void {
+  private function redirectOnFailure(
+    OrderInterface $order,
+    Klarna $plugin,
+    TranslatableMarkup $message,
+    \Exception $exception = NULL
+  ) : void {
+
+    $loggerMessage = (string) $message;
+
+    // Override error message from exception if set.
+    if ($exception) {
+      $loggerMessage = sprintf('[%s]: %s. ', get_class($exception), $exception->getMessage());
+    }
+    $loggerMessage .= sprintf('Order: %s', $order->id());
+
+    $plugin->getLogger()->critical($loggerMessage);
+    $this->messenger->addError($message);
+
     /** @var \Drupal\commerce_checkout\Entity\CheckoutFlowInterface $checkout_flow */
     $checkout_flow = $order->get('checkout_flow')->entity;
     $checkout_flow_plugin = $checkout_flow->getPlugin();

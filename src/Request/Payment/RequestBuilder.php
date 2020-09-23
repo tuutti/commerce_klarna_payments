@@ -11,6 +11,12 @@ use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
+use Klarna\Model\Capture;
+use Klarna\Model\MerchantUrls;
+use Klarna\Model\Options;
+use Klarna\Model\Ordersaddress;
+use Klarna\Model\OrdersorderLine;
+use Klarna\Model\Session;
 
 /**
  * Provides a request builder.
@@ -41,97 +47,83 @@ class RequestBuilder {
   /**
    * Creates capture request object.
    *
-   * @param array $capture
+   * @param \Klarna\Model\Capture $capture
    *   The capture.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
    * @return array
-   *   The capture request.
+   *   The capture object.
    */
-  public function createCaptureRequest(array $capture, OrderInterface $order) : array {
-    $balance = $order->getBalance();
-
-    $capture += [
-      'captured_amount' => UnitConverter::toAmount($balance),
-    ];
+  public function createCaptureRequest(Capture $capture, OrderInterface $order) : Capture {
+    $orderLines = [];
 
     foreach ($order->getItems() as $item) {
-      $orderItem = $this->createOrderLine($item);
-
-      $capture['order_lines'][] = $orderItem;
+      $orderLines[] = $this->createOrderLine($item);
     }
+
+    $capture->setOrderLines($orderLines)
+      ->setCapturedAmount(UnitConverter::toAmount($order->getBalance()));
 
     return $capture;
   }
 
   /**
-   * Generates place order request object.
-   *
-   * @param array $session
-   *   The existing session data.
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return array
-   *   The order object.
-   */
-  public function createPlaceRequest(array $session, OrderInterface $order) : array {
-    $session = $this->createUpdateRequest($session, $order);
-    return $session;
-  }
-
-  /**
    * Creates update/create session object.
    *
-   * @param array $session
+   * @param \Klarna\Model\Session $session
    *   The existing session data.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return array
+   * @return \Klarna\Model\Session
    *   The request data.
    *
    * @todo Support promotions.
    * @todo Figure out what to do when order is in PENDING state.
    */
-  public function createUpdateRequest(array $session, OrderInterface $order) : array {
+  public function createUpdateRequest(Session $session, OrderInterface $order) : Session {
     $plugin = $this->getPaymentPlugin($order);
 
-    $session += [
-      'purchase_country' => $order->getStore()->getAddress()->getCountryCode(),
-      'locale' => $this->getLocale(),
-      'purchase_currency' => $order->getTotalPrice()->getCurrencyCode(),
-      'order_amount' => UnitConverter::toAmount($order->getTotalPrice()),
-      'merchant_urls' => [
+    if ($address = $order->getStore()->getAddress()) {
+      $session->setPurchaseCountry($address->getCountryCode());
+    }
+
+    $session
+      ->setLocale($this->getLocale())
+      ->setPurchaseCurrency($order->getTotalPrice()->getCurrencyCode())
+      ->setOrderAmount(UnitConverter::toAmount($order->getTotalPrice()))
+      ->setMerchantUrls(new MerchantUrls([
         'confirmation' => $plugin->getReturnUri($order, 'commerce_payment.checkout.return'),
         'notification' => $plugin->getReturnUri($order, 'commerce_payment.notify', [
           'step' => 'complete',
         ]),
-      ],
-    ];
+      ]));
 
     if ($options = $this->getOptions($plugin)) {
-      $session['options'] = $options;
+      $session->setOptions(new Options($options));
     }
 
     if ($billingAddress = $this->getBillingAddress($order)) {
-      $session['billing_address'] = $billingAddress;
+      $session->setBillingAddress(new Ordersaddress($billingAddress));
     }
 
     $totalTax = 0;
 
+    $orderLines = [];
+
     foreach ($order->getItems() as $item) {
       $orderLine = $this->createOrderLine($item);
-      $session['order_lines'][] = $orderLine;
+      $orderLines[] = $orderLine;
 
       // Collect taxes only if enabled.
-      if ($this->hasTaxesIncluded($order) && isset($orderLine['total_tax_amount'])) {
+      if ($this->hasTaxesIncluded($order) && $orderLine->getTotalTaxAmount() !== NULL) {
         // Calculate total tax amount.
-        $totalTax += $orderLine['total_tax_amount'];
+        $totalTax += $orderLine->getTotalTaxAmount();
       }
     }
-    $session['order_tax_amount'] = $totalTax;
+
+    $session->setOrderTaxAmount($totalTax);
 
     // Inspect order adjustments to include shipping fees.
     foreach ($order->getAdjustments() as $adjustment) {
@@ -147,10 +139,12 @@ class RequestBuilder {
             'total_amount' => $amount,
             'type' => 'shipping',
           ];
-          $session['order_lines'][] = $shippingOrderItem;
+          $orderLines[] = new OrdersorderLine($shippingOrderItem);
           break;
       }
     }
+
+    $session->setOrderLines($orderLines);
 
     return $session;
   }
@@ -219,10 +213,10 @@ class RequestBuilder {
    * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
    *   The order item to create order line from.
    *
-   * @return array
+   * @return \Klarna\Model\OrdersorderLine
    *   The order line item.
    */
-  protected function createOrderLine(OrderItemInterface $item) : array {
+  protected function createOrderLine(OrderItemInterface $item) : OrdersorderLine {
     $unitPrice = UnitConverter::toAmount($item->getAdjustedUnitPrice());
     $totalPrice = UnitConverter::toAmount($item->getTotalPrice());
 
@@ -250,7 +244,7 @@ class RequestBuilder {
       ];
     }
 
-    return $orderItem;
+    return new OrdersorderLine($orderItem);
   }
 
   /**

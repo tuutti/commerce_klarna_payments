@@ -10,6 +10,13 @@ namespace Drupal\commerce_klarna_payments\Event;
 final class Events {
 
   /**
+   * An event to be run when we acknownledge the order.
+   *
+   * @var string
+   */
+  public const ACKNOWLEDGE_ORDER = 'commerce_klarna_payments.acknowledge_order';
+
+  /**
    * An event to alter values before creating a new session.
    *
    * @var string

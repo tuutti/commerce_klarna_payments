@@ -13,12 +13,12 @@ services:
     class: Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
     arguments: ['@language_manager']
 
-  commerce_klarna_payments.connector:
-    class: Drupal\commerce_klarna_payments\Connector
+  commerce_klarna_payments.api_manager:
+    class: Drupal\commerce_klarna_payments\ApiManager
     arguments: ['@event_dispatcher']
 
   commerce_klarna_payments.order_transition:
     class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber
-    arguments: ['@commerce_klarna_payments.connector', '@logger.channel.commerce_klarna_payments', '@entity_type.manager']
+    arguments: ['@commerce_klarna_payments.api_manager', '@logger.channel.commerce_klarna_payments', '@entity_type.manager']
     tags:
       - { name: event_subscriber }

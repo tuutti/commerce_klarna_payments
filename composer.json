@@ -10,9 +10,15 @@
     "issues": "https://www.drupal.org/project/issues/commerce_klarna_payments",
     "source": "http://cgit.drupalcode.org/commerce_klarna_payments"
   },
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://gitlab.com/tuutti/php-klarna.git"
+    }
+  ],
   "require": {
     "php": ">=7.1",
-    "klarna/kco_rest": "~4.0",
+    "tuutti/php-klarna": "*@dev",
     "webmozart/assert": "*",
     "drupal/commerce": "^2"
   }

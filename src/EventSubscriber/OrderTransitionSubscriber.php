@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
-use Drupal\commerce_klarna_payments\Connector;
+use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -14,6 +14,9 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Exception;
 use InvalidArgumentException;
+use Klarna\ApiException;
+use Klarna\Model\Order;
+use Klarna\Model\UpdateMerchantReferences;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -25,7 +28,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   /**
    * The klarna connector.
    *
-   * @var \Drupal\commerce_klarna_payments\Connector
+   * @var \Drupal\commerce_klarna_payments\ApiManager
    */
   protected $connector;
 
@@ -46,14 +49,14 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   /**
    * Constructs a new instance.
    *
-   * @param \Drupal\commerce_klarna_payments\Connector $connector
+   * @param \Drupal\commerce_klarna_payments\ApiManager $connector
    *   The Klarna connector.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
    */
-  public function __construct(Connector $connector, LoggerInterface $logger, EntityTypeManagerInterface $entityTypeManager) {
+  public function __construct(ApiManager $connector, LoggerInterface $logger, EntityTypeManagerInterface $entityTypeManager) {
     $this->connector = $connector;
     $this->logger = $logger;
     $this->paymentStorage = $entityTypeManager->getStorage('commerce_payment');
@@ -81,19 +84,68 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   }
 
   /**
+   * Releases the remaining authorization.
+   *
+   * @param \Klarna\Model\Order $orderRequest
+   *   The order request.
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   */
+  private function releaseRemainingAuthorization(Order $orderRequest, OrderInterface $order) : void {
+    $payments = $this->paymentStorage->loadMultipleByOrder($order);
+
+    // Release the remaining authorization in case we have at least
+    // one capture made already and found a local payment.
+    if (count($orderRequest->getCaptures()) > 0 && !empty($payments)) {
+      $this->connector->releaseRemainingAuthorization($order);
+
+      return;
+    }
+    $this->logger->critical(
+      new FormattableMarkup('Release reamining authorization failed. Payment not found for #@id', [
+        '@id' => $order->id(),
+      ])
+    );
+    throw new InvalidArgumentException('Payment not found.');
+  }
+
+  /**
+   * Creates a capture.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
+   *   The payment entity.
+   */
+  private function capturePayment(OrderInterface $order, PaymentInterface $payment) : void {
+    $capture = $this->connector->createCapture($order);
+
+    // Transition payment to captured state.
+    $transition = $payment->getState()
+      ->getWorkflow()
+      ->getTransition('capture');
+
+    $payment->getState()->applyTransition($transition);
+
+    $payment
+      ->setRemoteId($capture->getCaptureId())
+      ->save();
+  }
+
+  /**
    * This method is called whenever the order is completed.
    *
    * @param \Drupal\state_machine\Event\WorkflowTransitionEvent $event
    *   The transition event.
    */
   public function onOrderPlace(WorkflowTransitionEvent $event) : void {
-    /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
-    $order = $event->getEntity();
-
     // This should only be triggered when the order is being completed.
     if ($event->getTransition()->getToState()->getId() !== 'completed') {
       return;
     }
+
+    /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+    $order = $event->getEntity();
 
     // If the order is already paid in full, there's no need for trying to
     // capture the payment again.
@@ -102,41 +154,15 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      // No payment found. This usually happens when we have done a partial
-      // capture (manually).
+      $orderRequest = $this->connector->getOrder($order);
+
+      // No payment found in 'authorized' state. This should only happens when
+      // we have done a manual capture that didn't capture the full price.
       if (!$payment = $this->getPayment($order)) {
-        $orderRequest = $this->connector->getOrder($order);
-        $orderRequest->fetch();
-
-        $payments = $this->paymentStorage->loadMultipleByOrder($order);
-
-        // Release the remaining authorization in case we have at least
-        // one capture made already, since we can't make new payments after
-        // the order is completed.
-        if (!empty($orderRequest['captures']) && !empty($payments)) {
-          $this->connector->releaseRemainingAuthorization($order);
-
-          return;
-        }
-        $this->logger->critical(
-          new FormattableMarkup('Release reamining authorization failed. Payment not found for #@id', [
-            '@id' => $order->id(),
-          ])
-        );
-        throw new InvalidArgumentException('Payment not found.');
+        $this->releaseRemainingAuthorization($orderRequest, $order);
       }
-      $capture = $this->connector->createCapture($order);
 
-      // Transition payment to captured state.
-      $transition = $payment->getState()
-        ->getWorkflow()
-        ->getTransition('capture');
-
-      $payment->getState()->applyTransition($transition);
-
-      $payment
-        ->setRemoteId($capture['capture_id'])
-        ->save();
+      $this->capturePayment($order, $payment);
     }
     catch (NonKlarnaOrderException $e) {
       return;
@@ -168,20 +194,17 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       $orderRequest = $this->connector->getOrder($order);
 
       // Set the order number only if it's not set yet.
-      if (empty($orderRequest['merchant_reference1'])) {
-        $orderRequest->updateMerchantReferences([
-          'merchant_reference1' => $order->getOrderNumber(),
-        ]);
+      if ($orderRequest->getMerchantReference1()) {
+        return;
       }
+
+      $this->connector
+        ->getOrderManagementApi($order)
+        ->updateMerchantReferences($orderRequest->getOrderId(), NULL, new UpdateMerchantReferences([
+          'merchant_reference1' => $order->getOrderNumber(),
+        ]));
     }
-    catch (NonKlarnaOrderException $e) {
-      return;
-    }
-    catch (Exception $e) {
-      $this->logger->warning(new TranslatableMarkup('Setting Klarna order number failed for order @order: @message', [
-        '@order' => $order->id(),
-        '@message' => $e->getMessage(),
-      ]));
+    catch (ApiException | NonKlarnaOrderException $e) {
     }
   }
 

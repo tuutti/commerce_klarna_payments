@@ -12,7 +12,7 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Exception;
-use Klarna\Rest\Transport\Exception\ConnectorException;
+use Klarna\ObjectSerializer;
 
 /**
  * Provides the Klarna payments form.
@@ -56,16 +56,17 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       );
 
     try {
-      $data = $plugin
-        ->getConnector()
+      $data = $plugin->getApiManager()
         ->buildTransaction($order);
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
+        // @todo Check if we can cache this.
+        '#cache' => ['max-age' => 0],
         '#attached' => [
           'library' => ['commerce_klarna_payments/klarna-js-sdk'],
           'drupalSettings' => [
-            'klarnaPayments' => $data,
+            'klarnaPayments' => (array) ObjectSerializer::sanitizeForSerialization($data),
           ],
         ],
       ];
@@ -83,21 +84,6 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
         // Trigger a form error so we can disable continue button.
         $form_state->setErrorByName('klarna_authorization_token');
       }
-    }
-    catch (ConnectorException $e) {
-      // Session initialization failed.
-      $this->messenger()->addError(
-        $this->t('Failed to populate Klarna order. Please contact store administration if the problem persists.')
-      );
-
-      $plugin->getLogger()
-        ->error(
-          $this->t('Failed to populate Klara order #@id: [@exception]: @message', [
-            '@id' => $order->id(),
-            '@exception' => get_class($e),
-            '@message' => $e->getMessage(),
-          ])
-      );
     }
     catch (Exception $e) {
       $this->messenger()->addError(

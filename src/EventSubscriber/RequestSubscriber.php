@@ -7,6 +7,8 @@ namespace Drupal\commerce_klarna_payments\EventSubscriber;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
+use Klarna\Model\CreateOrderRequest;
+use Klarna\Model\Session;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -38,11 +40,11 @@ final class RequestSubscriber implements EventSubscriberInterface {
    *   The event to respond to.
    */
   public function onOrderCreate(RequestEvent $event) {
-    $order = $this
+    $session = $this
       ->builder
-      ->createPlaceRequest($event->getData(), $event->getOrder());
+      ->createUpdateRequest($event->getData(), $event->getOrder());
 
-    $event->setData($order);
+    $event->setData($session);
   }
 
   /**

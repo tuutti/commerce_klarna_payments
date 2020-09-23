@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_klarna_payments\Connector;
+use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -15,7 +15,7 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotifications
 use Drupal\commerce_price\Price;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
-use Klarna\Rest\Transport\ConnectorInterface;
+use Klarna\Configuration;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -33,30 +33,16 @@ use Symfony\Component\HttpFoundation\Request;
  *   requires_billing_information = FALSE
  * )
  */
-final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface {
+final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface, KlarnaInterface {
 
   use OptionsHelper;
 
   /**
-   * The key used for EU region.
+   * The klarna api manager.
    *
-   * @var string
+   * @var \Drupal\commerce_klarna_payments\ApiManager
    */
-  protected const REGION_EU = 'eu';
-
-  /**
-   * The key used for NA region.
-   *
-   * @var string
-   */
-  protected const REGION_NA = 'na';
-
-  /**
-   * The klarna connector.
-   *
-   * @var \Drupal\commerce_klarna_payments\Connector
-   */
-  protected $connector;
+  protected $apiManager;
 
   /**
    * The logger.
@@ -71,7 +57,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     /** @var self $instance */
     $instance = parent::create($container, $configuration, $plugin_definition, $plugin_definition);
-    $instance->setConnector($container->get('commerce_klarna_payments.connector'))
+    $instance->setApiManager($container->get('commerce_klarna_payments.api_manager'))
       ->setLogger($container->get('logger.channel.commerce_klarna_payments'));
 
     return $instance;
@@ -80,14 +66,14 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * Sets the connector.
    *
-   * @param \Drupal\commerce_klarna_payments\Connector $connector
+   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
    *   The connector.
    *
    * @return $this
    *   The self.
    */
-  public function setConnector(Connector $connector) : self {
-    $this->connector = $connector;
+  public function setApiManager(ApiManager $apiManager) : self {
+    $this->apiManager = $apiManager;
     return $this;
   }
 
@@ -121,11 +107,11 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * Gets the Klarna connector.
    *
-   * @return \Drupal\commerce_klarna_payments\Connector
+   * @return \Drupal\commerce_klarna_payments\ApiManager
    *   The connector.
    */
-  public function getConnector() : Connector {
-    return $this->connector;
+  public function getApiManager() : ApiManager {
+    return $this->apiManager;
   }
 
   /**
@@ -139,20 +125,14 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the live mode status.
-   *
-   * @return bool
-   *   Boolean indicating whether we are operating in live mode.
+   * {@inheritdoc}
    */
   public function isLive() : bool {
     return $this->configuration['mode'] === 'live';
   }
 
   /**
-   * Gets the region.
-   *
-   * @return string
-   *   The region.
+   * {@inheritdoc}
    */
   public function getRegion() : string {
     return $this->configuration['region'];
@@ -213,16 +193,33 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the api uri.
-   *
-   * @return string
-   *   The api uri.
+   * {@inheritdoc}
    */
-  public function getApiUri() : string {
-    if ($this->getRegion() === static::REGION_EU) {
-      return $this->isLive() ? ConnectorInterface::EU_BASE_URL : ConnectorInterface::EU_TEST_BASE_URL;
+  public function getHost() : string {
+    $host = static::REGIONS[$this->getRegion()][$this->isLive() ? 'live' : 'test'] ?? '';
+
+    if ($host === '') {
+      throw new \InvalidArgumentException('Host not found.');
     }
-    return $this->isLive() ? ConnectorInterface::NA_BASE_URL : ConnectorInterface::NA_TEST_BASE_URL;
+    return $host;
+  }
+
+  /**
+   * Gets the client configuration.
+   *
+   * @return \Klarna\Configuration
+   *   The configuration.
+   */
+  public function getClientConfiguration() : Configuration {
+    $configuration = (new Configuration())
+      ->setUsername($this->getUsername())
+      ->setPassword($this->getPassword())
+      ->setUserAgent('Libary drupal-klarna-payments-v1');
+
+    $host = $this->getHost();
+    $configuration->setHost($host);
+
+    return $configuration;
   }
 
   /**
@@ -247,8 +244,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       '#title' => $this->t('Region'),
       '#type' => 'select',
       '#options' => [
-        static::REGION_EU => $this->t('Europe'),
-        static::REGION_NA => $this->t('North America'),
+        'eu' => $this->t('Europe'),
+        'na' => $this->t('North America'),
+        'oc' => $this->t('Oceania'),
       ],
     ];
 
@@ -285,41 +283,41 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    */
   public function onReturn(OrderInterface $order, Request $request) {
     try {
-      $orderResponse = $this->connector->getOrder($order);
+      $orderResponse = $this->apiManager->getOrder($order);
+
+      $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
+
+      if (!in_array($orderResponse->getStatus(), $allowed)) {
+        throw new PaymentGatewayException(
+          $this->t('Order is in invalid state [@state], one of @expected expected.', [
+            '@state' => $orderResponse->getStatus(),
+            '@expected' => implode(',', $allowed),
+          ])
+        );
+      }
+      $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+
+      /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+      $payment = $payment_storage->create([
+        'amount' => $order->getTotalPrice(),
+        'payment_gateway' => $this->parentEntity->id(),
+        'order_id' => $order->id(),
+        'test' => !$this->isLive(),
+      ]);
+
+      $transition = $payment->getState()
+        ->getWorkflow()
+        ->getTransition('authorize');
+      $payment->getState()->applyTransition($transition);
+
+      $payment->setAuthorizedTime($this->time->getRequestTime())
+        ->save();
+
+      $this->apiManager->acknowledgeOrder($order, $orderResponse);
     }
     catch (\Exception $e) {
-      throw new PaymentGatewayException($e->getMessage());
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
-
-    $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
-
-    if (!in_array($orderResponse['status'], $allowed)) {
-      throw new PaymentGatewayException(
-        $this->t('Order is in invalid state [@state], one of @expected expected.', [
-          '@state' => $orderResponse['status'],
-          '@expected' => implode(',', $allowed),
-        ])
-      );
-    }
-    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-
-    /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
-    $payment = $payment_storage->create([
-      'amount' => $order->getTotalPrice(),
-      'payment_gateway' => $this->parentEntity->id(),
-      'order_id' => $order->id(),
-      'test' => !$this->isLive(),
-    ]);
-
-    $transition = $payment->getState()
-      ->getWorkflow()
-      ->getTransition('authorize');
-    $payment->getState()->applyTransition($transition);
-
-    $payment->setAuthorizedTime($this->time->getRequestTime())
-      ->save();
-
-    $orderResponse->acknowledge();
   }
 
   /**
@@ -333,7 +331,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $order = $payment->getOrder();
 
     try {
-      $capture = $this->connector->createCapture($order, $amount);
+      $capture = $this->apiManager->createCapture($order, $amount);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
@@ -343,7 +341,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $payment->getState()->applyTransition($transition);
 
     $payment->setAmount($amount);
-    $payment->setRemoteId($capture->getId());
+    $payment->setRemoteId($capture->getCaptureId());
     $payment->save();
   }
 
@@ -355,7 +353,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $order = $payment->getOrder();
 
     try {
-      $this->connector->voidPayment($order);
+      $this->apiManager->voidPayment($order);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
