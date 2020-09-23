@@ -10,7 +10,9 @@ use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
+use Drupal\commerce_price\Price;
 use Drupal\Core\Language\LanguageManagerInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\Model\Capture;
 use Klarna\Model\MerchantUrls;
 use Klarna\Model\Options;
@@ -52,7 +54,7 @@ class RequestBuilder {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return array
+   * @return \Klarna\Model\Capture
    *   The capture object.
    */
   public function createCaptureRequest(Capture $capture, OrderInterface $order) : Capture {
@@ -104,12 +106,15 @@ class RequestBuilder {
       $session->setOptions(new Options($options));
     }
 
-    if ($billingAddress = $this->getBillingAddress($order)) {
+    if ($billingAddress = $this->getAddress($order, 'billing')) {
       $session->setBillingAddress(new Ordersaddress($billingAddress));
     }
 
-    $totalTax = 0;
+    if ($shippingAddress = $this->getAddress($order, 'shipping')) {
+      $session->setShippingAddress(new Ordersaddress($shippingAddress));
+    }
 
+    $totalTax   = 0;
     $orderLines = [];
 
     foreach ($order->getItems() as $item) {
@@ -123,28 +128,39 @@ class RequestBuilder {
       }
     }
 
-    $session->setOrderTaxAmount($totalTax);
+    // Add shipping info, if present.
+    if ($order->hasField('shipments') && !$order->get('shipments')->isEmpty()) {
+      /** @var \Drupal\commerce_shipping\Entity\ShipmentInterface[] $shipments */
+      $shipments = $order->get('shipments')->referencedEntities();
 
-    // Inspect order adjustments to include shipping fees.
-    foreach ($order->getAdjustments() as $adjustment) {
-      $amount = UnitConverter::toAmount($adjustment->getAmount());
+      foreach ($shipments as $shipment) {
+        $amount = UnitConverter::toAmount($shipment->getAmount());
 
-      switch ($adjustment->getType()) {
-        case 'shipping':
-          // @todo keep watching progress of https://www.drupal.org/node/2874158.
-          $shippingOrderItem = [
-            'name' => $adjustment->getLabel(),
-            'quantity' => 1,
-            'unit_price' => $amount,
-            'total_amount' => $amount,
-            'type' => 'shipping',
-          ];
-          $orderLines[] = new OrdersorderLine($shippingOrderItem);
-          break;
+        $shippingOrderItem = (new OrdersorderLine())
+          // We use the same label the shipping adjustments are using,
+          // which is better than the generic shipment labels.
+          ->setName((string) new TranslatableMarkup('Shipping'))
+          ->setQuantity(1)
+          ->setUnitPrice($amount)
+          ->setTotalAmount($amount)
+          ->setType('shipping_fee');
+
+        foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
+          if (!$percentage = $taxAdjustment->getPercentage()) {
+            $percentage = '0';
+          }
+          $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
+            ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
+
+          $totalTax += $shippingOrderItem->getTotalTaxAmount();
+        }
+
+        $orderLines[] = $shippingOrderItem;
       }
     }
 
-    $session->setOrderLines($orderLines);
+    $session->setOrderTaxAmount($totalTax)
+      ->setOrderLines($orderLines);
 
     return $session;
   }
@@ -220,31 +236,22 @@ class RequestBuilder {
     $unitPrice = UnitConverter::toAmount($item->getAdjustedUnitPrice());
     $totalPrice = UnitConverter::toAmount($item->getTotalPrice());
 
-    $orderItem = [
-      'name' => $item->getTitle(),
-      'quantity' => (int) $item->getQuantity(),
-      'unit_price' => $unitPrice,
-      'total_amount' => $totalPrice,
-    ];
+    $orderItem = (new OrdersorderLine())
+      ->setName($item->getTitle())
+      ->setQuantity((int) $item->getQuantity())
+      ->setUnitPrice($unitPrice)
+      ->setTotalAmount($totalPrice);
 
-    foreach ($item->getAdjustments() as $adjustment) {
-      // Only tax adjustments are supported by default.
-      if ($adjustment->getType() !== 'tax') {
-        continue;
-      }
-      $tax = UnitConverter::toAmount($adjustment->getAmount());
-
+    foreach ($item->getAdjustments(['tax']) as $adjustment) {
       if (!$percentage = $adjustment->getPercentage()) {
         $percentage = '0';
       }
 
-      $orderItem += [
-        'tax_rate' => UnitConverter::toTaxRate($percentage),
-        'total_tax_amount' => $tax,
-      ];
+      $orderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
+        ->setTotalTaxAmount(UnitConverter::toAmount($adjustment->getAmount()));
     }
 
-    return new OrdersorderLine($orderItem);
+    return $orderItem;
   }
 
   /**
@@ -252,21 +259,26 @@ class RequestBuilder {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   * @param string $type
+   *   The address type (shipping or billing for example).
    *
    * @return array|null
    *   The billing address or null.
    */
-  protected function getBillingAddress(OrderInterface $order) : ? array {
-    if (!$billingData = $order->getBillingProfile()) {
+  protected function getAddress(OrderInterface $order, string $type) : ? array {
+    $profiles = $order->collectProfiles();
+
+    if (empty($profiles[$type])) {
       return NULL;
     }
+    $profile = $profiles[$type];
 
     $data = [
       'email' => $order->getEmail(),
     ];
 
     /** @var \Drupal\address\AddressInterface $address */
-    $address = $billingData->get('address')->first();
+    $address = $profile->get('address')->first();
 
     if ($address instanceof AddressInterface) {
       $data += [

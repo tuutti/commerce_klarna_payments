@@ -7,8 +7,6 @@ namespace Drupal\commerce_klarna_payments\EventSubscriber;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
-use Klarna\Model\CreateOrderRequest;
-use Klarna\Model\Session;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**

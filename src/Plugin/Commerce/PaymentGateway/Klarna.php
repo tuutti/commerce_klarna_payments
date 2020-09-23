@@ -295,29 +295,43 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
           ])
         );
       }
-      $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-
-      /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
-      $payment = $payment_storage->create([
-        'amount' => $order->getTotalPrice(),
-        'payment_gateway' => $this->parentEntity->id(),
-        'order_id' => $order->id(),
-        'test' => !$this->isLive(),
-      ]);
-
-      $transition = $payment->getState()
-        ->getWorkflow()
-        ->getTransition('authorize');
-      $payment->getState()->applyTransition($transition);
-
-      $payment->setAuthorizedTime($this->time->getRequestTime())
-        ->save();
-
+      $this->createAuthorizationPayment($order);
       $this->apiManager->acknowledgeOrder($order, $orderResponse);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
+  }
+
+  /**
+   * Creates new payment in 'authorize' state.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return \Drupal\commerce_payment\Entity\PaymentInterface
+   *   The payment.
+   */
+  public function createAuthorizationPayment(OrderInterface $order) : PaymentInterface {
+    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+
+    /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
+    $payment = $payment_storage->create([
+      'amount' => $order->getBalance(),
+      'payment_gateway' => $this->parentEntity->id(),
+      'order_id' => $order->id(),
+      'test' => !$this->isLive(),
+    ]);
+
+    $transition = $payment->getState()
+      ->getWorkflow()
+      ->getTransition('authorize');
+    $payment->getState()->applyTransition($transition);
+
+    $payment->setAuthorizedTime($this->time->getRequestTime())
+      ->save();
+
+    return $payment;
   }
 
   /**

@@ -8,14 +8,11 @@ use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
-use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Exception;
-use InvalidArgumentException;
 use Klarna\ApiException;
-use Klarna\Model\Order;
 use Klarna\Model\UpdateMerchantReferences;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -84,55 +81,6 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Releases the remaining authorization.
-   *
-   * @param \Klarna\Model\Order $orderRequest
-   *   The order request.
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   */
-  private function releaseRemainingAuthorization(Order $orderRequest, OrderInterface $order) : void {
-    $payments = $this->paymentStorage->loadMultipleByOrder($order);
-
-    // Release the remaining authorization in case we have at least
-    // one capture made already and found a local payment.
-    if (count($orderRequest->getCaptures()) > 0 && !empty($payments)) {
-      $this->connector->releaseRemainingAuthorization($order);
-
-      return;
-    }
-    $this->logger->critical(
-      new FormattableMarkup('Release reamining authorization failed. Payment not found for #@id', [
-        '@id' => $order->id(),
-      ])
-    );
-    throw new InvalidArgumentException('Payment not found.');
-  }
-
-  /**
-   * Creates a capture.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Drupal\commerce_payment\Entity\PaymentInterface $payment
-   *   The payment entity.
-   */
-  private function capturePayment(OrderInterface $order, PaymentInterface $payment) : void {
-    $capture = $this->connector->createCapture($order);
-
-    // Transition payment to captured state.
-    $transition = $payment->getState()
-      ->getWorkflow()
-      ->getTransition('capture');
-
-    $payment->getState()->applyTransition($transition);
-
-    $payment
-      ->setRemoteId($capture->getCaptureId())
-      ->save();
-  }
-
-  /**
    * This method is called whenever the order is completed.
    *
    * @param \Drupal\state_machine\Event\WorkflowTransitionEvent $event
@@ -154,15 +102,17 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      $orderRequest = $this->connector->getOrder($order);
+      $plugin = $this->connector->getPlugin($order);
 
+      $payment = $this->getPayment($order);
       // No payment found in 'authorized' state. This should only happens when
       // we have done a manual capture that didn't capture the full price.
-      if (!$payment = $this->getPayment($order)) {
-        $this->releaseRemainingAuthorization($orderRequest, $order);
+      if (!$payment) {
+        // Make a second payment in authorized state with remaining balance.
+        $payment = $plugin->createAuthorizationPayment($order);
       }
 
-      $this->capturePayment($order, $payment);
+      $plugin->capturePayment($payment);
     }
     catch (NonKlarnaOrderException $e) {
       return;

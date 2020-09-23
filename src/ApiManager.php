@@ -181,8 +181,6 @@ final class ApiManager {
 
     $orderResponse = $this->getOrder($order);
 
-    // @todo Find out, if a DELETE /payments/v1/authorizations/{authorizationToken}
-    // request would be better here.
     $this->getOrderManagementApi($order)->cancelOrder($orderResponse->getOrderId());
   }
 
