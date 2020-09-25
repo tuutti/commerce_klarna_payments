@@ -1,0 +1,92 @@
+<klarna>
+  <ul class="klarna-payment-categories">
+    <li each={ item in state.items } onclick={ () => selectMethod(item) } class={ item.selected ? 'is-selected' : ''}>
+      <span class=indicator></span>
+      <span class=name>{ item.name }</span>
+      <div if={ item.selected } class={ item.done ? 'riot-processed' : '' } data-selector="klarna-container" id=klarna-payment-container-{ item.identifier }>
+      </div>
+    </li>
+  </ul>
+
+  <script>
+    export default {
+      state: {
+        selectedPaymentMethod: null,
+        tokenElement: null,
+        authorizationAttempted: false,
+        items: [],
+      },
+
+      onMounted() {
+        Klarna.Payments.init({
+          client_token: this.props.client_token
+        })
+
+        this.update({
+          items: this.props.payment_method_categories,
+          tokenElement: document.querySelector('[data-klarna-selector="authorization-token"]'),
+        })
+
+        document
+          .querySelector('[data-klarna-selector="submit"]')
+          .addEventListener('click', this.submitHandler)
+      },
+
+
+      handleAuthorizationResponse(response) {
+        console.log(response)
+        if (response.approved && response.show_form) {
+          this.state.tokenElement
+            .setAttribute('value', response.authorization_token)
+
+          // Submit form to redirect to complete page.
+          document.querySelector('.payment-redirect-form').submit();
+        }
+      },
+
+      submitHandler(event) {
+        // Make sure we have authorization token set.
+        if (!this.state.tokenElement.getAttribute('value').length > 0) {
+          event.preventDefault()
+        }
+
+        if (!this.state.selectedPaymentMethod) {
+          return false
+        }
+
+        let method = { payment_method_category: this.state.selectedPaymentMethod }
+
+        if (!this.state.authorizationAttempted) {
+          // Indicate that we have attempted to authorize the order
+          // and all further calls should use reauthorize callback
+          // rather than this.
+          this.update({ authorizationAttempted: true })
+
+          Klarna.Payments.authorize(method, {}, this.handleAuthorizationResponse)
+        }
+        else {
+          // Attempt to reauthorize if we've done an authorization request already.
+          Klarna.Payments.reauthorize(method, {}, this.handleAuthorizationResponse)
+        }
+      },
+
+      selectMethod(selected) {
+        this.update({
+          authorizationAttempted: false,
+          items: this.state.items.map(function (item) {
+            // Deselect all other methods.
+            item.selected = item.identifier === selected.identifier
+
+            return item
+          }),
+          selectedPaymentMethod: selected.identifier,
+        })
+
+        Klarna.Payments.load({
+          container: '#klarna-payment-container-' + selected.identifier,
+          payment_method_category: selected.identifier
+        });
+      },
+    }
+  </script>
+</klarna>
