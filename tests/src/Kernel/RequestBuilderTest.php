@@ -58,7 +58,7 @@ class RequestBuilderTest extends RequestBuilderTestBase {
    * Tests ::createUpdateRequest().
    */
   public function testCreateUpdateRequest() : void {
-    $request = $this->sut->createUpdateRequest([], $this->createOrder());
+    $request = $this->sut->createSessionRequest([], $this->createOrder());
     $this->assertEquals($this->getExpected(), $request);
   }
 
@@ -90,7 +90,7 @@ class RequestBuilderTest extends RequestBuilderTestBase {
     ];
     $this->gateway->setPluginConfiguration(['options' => $options])->save();
 
-    $request = $this->sut->createUpdateRequest([], $this->createOrder());
+    $request = $this->sut->createSessionRequest([], $this->createOrder());
     $this->assertEquals($options, $request['options']);
   }
 
@@ -142,7 +142,7 @@ class RequestBuilderTest extends RequestBuilderTestBase {
       ],
     ];
 
-    $this->assertEquals($expected, $this->sut->createUpdateRequest([], $order));
+    $this->assertEquals($expected, $this->sut->createSessionRequest([], $order));
   }
 
 }

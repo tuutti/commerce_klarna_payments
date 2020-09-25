@@ -10,6 +10,7 @@ use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Exception\FraudException;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
+use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
 use InvalidArgumentException;
@@ -36,16 +37,26 @@ final class ApiManager {
    *
    * @var \Symfony\Component\EventDispatcher\EventSubscriberInterface
    */
-  protected $eventDispatcher;
+  private $eventDispatcher;
+
+  /**
+   * The request builder.
+   *
+   * @var \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
+   */
+  private $requestBuilder;
 
   /**
    * Constructs a new instance.
    *
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
    *   The event dispatcher.
+   * @param \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder $requestBuilder
+   *   The request builder.
    */
-  public function __construct(EventDispatcherInterface $eventDispatcher) {
+  public function __construct(EventDispatcherInterface $eventDispatcher, RequestBuilder $requestBuilder) {
     $this->eventDispatcher = $eventDispatcher;
+    $this->requestBuilder = $requestBuilder;
   }
 
   /**
@@ -58,6 +69,7 @@ final class ApiManager {
    *   The payment plugin.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException|
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    */
   public function getPlugin(OrderInterface $order) : ? Klarna {
     $gateway = $order->get('payment_gateway');
@@ -104,21 +116,27 @@ final class ApiManager {
    *
    * @return \Klarna\Model\Capture
    *   The capture.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function createCapture(OrderInterface $order, Price $amount = NULL) : Capture {
     $orderResponse = $this->getOrder($order);
     $currentCaptures = $orderResponse->getCaptures();
 
+    $capture = $this->requestBuilder
+      ->createCaptureRequest($order);
+
     $capture = $this->eventDispatcher
-      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order, new Capture()))
+      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order, $capture))
       ->getData();
 
     if ($amount) {
       $capture->setCapturedAmount(UnitConverter::toAmount($amount));
     }
 
-    $request = $this->getCapturesApi($order);
-    $request->captureOrder($orderResponse->getOrderId(), $capture);
+    $this->getCapturesApi($order)
+      ->captureOrder($orderResponse->getOrderId(), $capture);
 
     $orderResponse = $this->getOrder($order);
     // Create capture request doesn't return the saved capture.
@@ -136,6 +154,9 @@ final class ApiManager {
    *   The order to release authorizations.
    * @param \Klarna\Model\Order|null $orderResponse
    *   The order response.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function releaseRemainingAuthorization(OrderInterface $order, Order $orderResponse = NULL) : void {
     $this->eventDispatcher
@@ -157,6 +178,9 @@ final class ApiManager {
    *   The order.
    * @param \Klarna\Model\Order|null $orderResponse
    *   The order response.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function acknowledgeOrder(OrderInterface $order, Order $orderResponse = NULL) : void {
     $this->eventDispatcher
@@ -174,6 +198,9 @@ final class ApiManager {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function voidPayment(OrderInterface $order) : void {
     $this->eventDispatcher
@@ -194,10 +221,18 @@ final class ApiManager {
    *
    * @return \Klarna\Model\PaymentOrder
    *   The authorization response.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
+   * @throws \Drupal\commerce_klarna_payments\Exception\FraudException
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function authorizeOrder(OrderInterface $order, string $authorizeToken) : PaymentOrder {
+    $session = $this->requestBuilder
+      ->createSessionRequest($order);
+
     $createOrderRequest = $this->eventDispatcher
-      ->dispatch(Events::ORDER_CREATE, new RequestEvent($order, new Session()))
+      ->dispatch(Events::ORDER_CREATE, new RequestEvent($order, $session))
       ->getData();
 
     if ($createOrderRequest instanceof Session) {
@@ -290,10 +325,17 @@ final class ApiManager {
    *
    * @return \Klarna\Model\Session
    *   The session response.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
-  public function buildTransaction(OrderInterface $order) : Session {
+  public function sessionRequest(OrderInterface $order) : Session {
+    $session = $this->requestBuilder
+      ->createSessionRequest($order);
+
     $session = $this->eventDispatcher
-      ->dispatch(Events::SESSION_CREATE, new RequestEvent($order, new Session()))
+      ->dispatch(Events::SESSION_CREATE, new RequestEvent($order, $session))
       ->getData();
 
     if (!$session instanceof Session) {

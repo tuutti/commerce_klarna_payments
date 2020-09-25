@@ -83,7 +83,7 @@ class RequestBuilderTaxTest extends RequestBuilderTestBase {
         'amount' => new Price('0.4', 'USD'),
       ]),
     ]);
-    $request = $this->sut->createUpdateRequest([], $order);
+    $request = $this->sut->createSessionRequest([], $order);
 
     $this->assertEquals($this->getExpected(), $request);
   }

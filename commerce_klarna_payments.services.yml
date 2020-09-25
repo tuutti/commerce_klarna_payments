@@ -3,19 +3,13 @@ services:
     parent: logger.channel_base
     arguments: ['commerce_klarna_payments']
 
-  commerce_klarna_payments.session_subscriber:
-    class: Drupal\commerce_klarna_payments\EventSubscriber\RequestSubscriber
-    arguments: ['@commerce_klarna_payments.request_builder']
-    tags:
-      - { name: event_subscriber }
-
   commerce_klarna_payments.request_builder:
     class: Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
     arguments: ['@language_manager']
 
   commerce_klarna_payments.api_manager:
     class: Drupal\commerce_klarna_payments\ApiManager
-    arguments: ['@event_dispatcher']
+    arguments: ['@event_dispatcher', '@commerce_klarna_payments.request_builder']
 
   commerce_klarna_payments.order_transition:
     class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber

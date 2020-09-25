@@ -13,13 +13,6 @@ function commerce_klarna_payments_theme($existing, $type, $theme, $path) {
     'commerce_klarna_payments_container' => [
       'variables' => [],
     ],
-    'commerce_klarna_payments_payment_method' => [
-      'variables' => [
-        'id' => NULL,
-        'name' => NULL,
-        'selected' => FALSE,
-      ],
-    ],
   ];
 
   return $theme;

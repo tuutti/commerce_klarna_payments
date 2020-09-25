@@ -17,6 +17,7 @@ use Klarna\Model\Options;
 use Klarna\Model\Ordersaddress;
 use Klarna\Model\OrdersorderLine;
 use Klarna\Model\Session;
+use Webmozart\Assert\Assert;
 
 /**
  * Provides a request builder.
@@ -47,15 +48,14 @@ class RequestBuilder {
   /**
    * Creates capture request object.
    *
-   * @param \Klarna\Model\Capture $capture
-   *   The capture.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
    * @return \Klarna\Model\Capture
    *   The capture object.
    */
-  public function createCaptureRequest(Capture $capture, OrderInterface $order) : Capture {
+  public function createCaptureRequest(OrderInterface $order) : Capture {
+    $capture = new Capture();
     $orderLines = [];
 
     foreach ($order->getItems() as $item) {
@@ -71,8 +71,6 @@ class RequestBuilder {
   /**
    * Creates update/create session object.
    *
-   * @param \Klarna\Model\Session $session
-   *   The existing session data.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
@@ -82,9 +80,11 @@ class RequestBuilder {
    * @todo Support promotions.
    * @todo Figure out what to do when order is in PENDING state.
    */
-  public function createUpdateRequest(Session $session, OrderInterface $order) : Session {
+  public function createSessionRequest(OrderInterface $order) : Session {
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
     $plugin = $order->payment_gateway->entity->getplugin();
+
+    $session = new Session();
 
     if ($storeAddress = $order->getStore()->getAddress()) {
       $session->setPurchaseCountry($storeAddress->getCountryCode());
@@ -106,11 +106,11 @@ class RequestBuilder {
     }
 
     if ($billingAddress = $this->getAddress($order, 'billing')) {
-      $session->setBillingAddress(new Ordersaddress($billingAddress));
+      $session->setBillingAddress($billingAddress);
     }
 
     if ($shippingAddress = $this->getAddress($order, 'shipping')) {
-      $session->setShippingAddress(new Ordersaddress($shippingAddress));
+      $session->setShippingAddress($shippingAddress);
     }
 
     $totalTax   = 0;
@@ -132,29 +132,11 @@ class RequestBuilder {
       $shipments = $order->get('shipments')->referencedEntities();
 
       foreach ($shipments as $shipment) {
-        $amount = UnitConverter::toAmount($shipment->getAmount());
+        $shippingOrderItem = $this->createShipmentOrderLine($shipment);
 
-        $shippingOrderItem = (new OrdersorderLine())
-          // We use the same label the shipping adjustments are using,
-          // which is better than the generic shipment labels.
-          ->setName((string) new TranslatableMarkup('Shipping'))
-          ->setQuantity(1)
-          ->setUnitPrice($amount)
-          ->setTotalAmount($amount)
-          ->setType('shipping_fee');
-
-        foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
-          if (!$percentage = $taxAdjustment->getPercentage()) {
-            $percentage = '0';
-          }
-          $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
-            ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
-
-          if ($shippingOrderItem->getTotalTaxAmount() !== NULL) {
-            $totalTax += $shippingOrderItem->getTotalTaxAmount();
-          }
+        if ($shippingOrderItem->getTotalTaxAmount() !== NULL) {
+          $totalTax += $shippingOrderItem->getTotalTaxAmount();
         }
-
         $orderLines[] = $shippingOrderItem;
       }
     }
@@ -166,25 +148,37 @@ class RequestBuilder {
   }
 
   /**
-   * Attempts to map ISO locale to RFC 1766 locale.
+   * Creates the shipment order line.
    *
-   * @return string
-   *   The RFC 1766 locale.
+   * @param \Drupal\commerce_shipping\Entity\ShipmentInterface $shipment
+   *   The shipment.
+   *
+   * @return \Klarna\Model\OrdersorderLine
+   *   The order line.
    */
-  protected function getLocale() : string {
-    $locale = strtolower($this->languageManager->getCurrentLanguage()->getId());
+  protected function createShipmentOrderLine($shipment) : OrdersorderLine {
+    Assert::isInstanceOf($shipment, '\Drupal\commerce_shipping\Entity\ShipmentInterface');
 
-    $map = [
-      'fi' => 'fi-FI',
-      'sv' => 'sv-SV',
-      'nb' => 'nb-NO',
-      'nn' => 'nn-NO',
-      'de' => 'de-DE',
-      // Drupal does not define these by default.
-      'at' => 'de-AT',
-    ];
+    $amount = UnitConverter::toAmount($shipment->getAmount());
 
-    return $map[$locale] ?? 'en-US';
+    $shippingOrderItem = (new OrdersorderLine())
+      // We use the same label the shipping adjustments are using,
+      // which is better than the generic shipment labels.
+      ->setName((string) new TranslatableMarkup('Shipping'))
+      ->setQuantity(1)
+      ->setUnitPrice($amount)
+      ->setTotalAmount($amount)
+      ->setType('shipping_fee');
+
+    foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
+      if (!$percentage = $taxAdjustment->getPercentage()) {
+        $percentage = '0';
+      }
+      $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
+        ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
+    }
+
+    return $shippingOrderItem;
   }
 
   /**
@@ -216,6 +210,28 @@ class RequestBuilder {
   }
 
   /**
+   * Attempts to map ISO locale to RFC 1766 locale.
+   *
+   * @return string
+   *   The RFC 1766 locale.
+   */
+  protected function getLocale() : string {
+    $locale = strtolower($this->languageManager->getCurrentLanguage()->getId());
+
+    $map = [
+      'fi' => 'fi-FI',
+      'sv' => 'sv-SV',
+      'nb' => 'nb-NO',
+      'nn' => 'nn-NO',
+      'de' => 'de-DE',
+      // Drupal does not define these by default.
+      'at' => 'de-AT',
+    ];
+
+    return $map[$locale] ?? 'en-US';
+  }
+
+  /**
    * Gets the billing address.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -226,7 +242,7 @@ class RequestBuilder {
    * @return array|null
    *   The billing address or null.
    */
-  protected function getAddress(OrderInterface $order, string $type) : ? array {
+  protected function getAddress(OrderInterface $order, string $type) : ? Ordersaddress {
     $profiles = $order->collectProfiles();
 
     if (empty($profiles[$type])) {
@@ -253,7 +269,7 @@ class RequestBuilder {
       ];
     }
 
-    return array_filter($data);
+    return new Ordersaddress(array_filter($data));
   }
 
 }

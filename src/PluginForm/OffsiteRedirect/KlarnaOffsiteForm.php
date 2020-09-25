@@ -48,16 +48,14 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       return $form;
     }
 
-    $form = $this
-      ->buildRedirectForm(
-        $form,
-        $form_state,
-        $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect')
-      );
+    $form = $this->buildRedirectForm(
+      $form,
+      $form_state,
+      $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect')
+    );
 
     try {
-      $data = $plugin->getApiManager()
-        ->buildTransaction($order);
+      $data = $plugin->getApiManager()->sessionRequest($order);
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
@@ -106,10 +104,9 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
   /**
    * {@inheritdoc}
    */
-  public function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
+  protected function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
     $form['#process'][] = [get_class($this), 'processRedirectForm'];
     $form['#redirect_url'] = $redirect_url;
-    $form['#method'] = self::REDIRECT_GET;
 
     return $form;
   }
