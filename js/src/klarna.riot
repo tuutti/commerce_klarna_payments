@@ -1,9 +1,17 @@
 <klarna>
   <ul class="klarna-payment-categories">
-    <li each={ item in state.items } onclick={ () => selectMethod(item) } class={ item.selected ? 'is-selected' : ''}>
-      <span class=indicator></span>
+    <li
+      each={ item in state.items }
+      onclick={ () => selectMethod(item) }
+      class={ item.selected ? 'is-selected' : ''}
+    >
+      <span class=indicator />
       <span class=name>{ item.name }</span>
-      <div if={ item.selected } class={ item.done ? 'riot-processed' : '' } data-selector="klarna-container" id=klarna-payment-container-{ item.identifier }>
+      <div
+        if={ item.selected }
+        class={ item.done ? 'riot-processed' : '' }
+        id=klarna-payment-container-{ item.identifier }
+      >
       </div>
     </li>
   </ul>
@@ -34,7 +42,12 @@
 
 
       handleAuthorizationResponse(response) {
-        console.log(response)
+        // Reset aurhotization attempted in case user closes the
+        // popup.
+        if (response.show_form && !response.approved) {
+          this.update({ authorizationAttempted: false })
+        }
+
         if (response.approved && response.show_form) {
           this.state.tokenElement
             .setAttribute('value', response.authorization_token)
@@ -74,7 +87,6 @@
         this.update({
           authorizationAttempted: false,
           items: this.state.items.map(function (item) {
-            // Deselect all other methods.
             item.selected = item.identifier === selected.identifier
 
             return item
