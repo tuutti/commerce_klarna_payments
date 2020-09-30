@@ -7,12 +7,12 @@ namespace Drupal\commerce_klarna_payments;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
-use Drupal\commerce_klarna_payments\Exception\FraudException;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
+use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\KlarnaInterface;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
+use GuzzleHttp\Client;
 use InvalidArgumentException;
 use Klarna\Api\CapturesApi;
 use Klarna\Api\OrdersApi;
@@ -24,13 +24,14 @@ use Klarna\Model\CreateOrderRequest;
 use Klarna\Model\Order;
 use Klarna\Model\PaymentOrder;
 use Klarna\Model\Session;
-use Klarna\ObjectSerializer;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
  * Provides a service to interact with Klarna.
  */
 final class ApiManager {
+
+  use ObjectSerializerTrait;
 
   /**
    * The event dispatcher.
@@ -47,16 +48,30 @@ final class ApiManager {
   private $requestBuilder;
 
   /**
+   * The client.
+   *
+   * @var \GuzzleHttp\Client|null
+   */
+  private $client;
+
+  /**
    * Constructs a new instance.
    *
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
    *   The event dispatcher.
    * @param \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder $requestBuilder
    *   The request builder.
+   * @param \GuzzleHttp\Client|null $client
+   *   The client (optional).
    */
-  public function __construct(EventDispatcherInterface $eventDispatcher, RequestBuilder $requestBuilder) {
+  public function __construct(
+    EventDispatcherInterface $eventDispatcher,
+    RequestBuilder $requestBuilder,
+    Client $client = NULL
+  ) {
     $this->eventDispatcher = $eventDispatcher;
     $this->requestBuilder = $requestBuilder;
+    $this->client = $client;
   }
 
   /**
@@ -71,7 +86,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException|
    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    */
-  public function getPlugin(OrderInterface $order) : ? Klarna {
+  public function getPlugin(OrderInterface $order) : ? KlarnaInterface {
     $gateway = $order->get('payment_gateway');
 
     if ($gateway->isEmpty()) {
@@ -79,7 +94,7 @@ final class ApiManager {
     }
     $plugin = $gateway->first()->entity->getPlugin();
 
-    if (!$plugin instanceof Klarna) {
+    if (!$plugin instanceof KlarnaInterface) {
       throw new NonKlarnaOrderException('Payment gateway not instanceof Klarna.');
     }
     return $plugin;
@@ -131,6 +146,10 @@ final class ApiManager {
       ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order, $capture))
       ->getData();
 
+    if (!$capture instanceof Capture) {
+      throw new InvalidArgumentException('Capture is not set.');
+    }
+
     if ($amount) {
       $capture->setCapturedAmount(UnitConverter::toAmount($amount));
     }
@@ -139,10 +158,18 @@ final class ApiManager {
       ->captureOrder($orderResponse->getOrderId(), $capture);
 
     $orderResponse = $this->getOrder($order);
-    // Create capture request doesn't return the saved capture.
+    // Create capture request doesn't return the capture it made.
     // We should'nt have any recaptures before this, but re-fetch the order and
     // compare captures to previously fetched captures just to be sure.
-    $newCaptures = array_diff($orderResponse->getCaptures(), $currentCaptures);
+    $newCaptures = array_filter($orderResponse->getCaptures(), function (Capture $newCapture) use ($currentCaptures) {
+      foreach ($currentCaptures as $oldCapture) {
+        // We only care about newly made captures.
+        if ($oldCapture->getCaptureId() === $newCapture->getCaptureId()) {
+          return FALSE;
+        }
+      }
+      return TRUE;
+    });
 
     return reset($newCaptures);
   }
@@ -223,7 +250,6 @@ final class ApiManager {
    *   The authorization response.
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
-   * @throws \Drupal\commerce_klarna_payments\Exception\FraudException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
    */
@@ -236,17 +262,14 @@ final class ApiManager {
       ->getData();
 
     if ($createOrderRequest instanceof Session) {
+      // Session and CreateOrderRequest have identical fields.
       // Convert Session request to CreateOrderRequest.
-      $createOrderRequest = (array) ObjectSerializer::sanitizeForSerialization($createOrderRequest);
-      $createOrderRequest = new CreateOrderRequest($createOrderRequest);
+      $createOrderRequest = new CreateOrderRequest($this->modelToArray($createOrderRequest));
     }
 
     $request = $this->getPaymentOrderApi($order);
     $response = $request->createOrder($authorizeToken, $createOrderRequest);
 
-    if (!in_array($response->getFraudStatus(), ['ACCEPTED', 'PENDING'])) {
-      throw new FraudException(sprintf('Fraud validation failed for order %s.', $order->id()));
-    }
     $order->setData('klarna_order_id', $response->getOrderId())
       ->save();
 
@@ -266,7 +289,7 @@ final class ApiManager {
    */
   public function getSessionsApi(OrderInterface $order) : SessionsApi {
     $plugin = $this->getPlugin($order);
-    return new SessionsApi(NULL, $plugin->getClientConfiguration());
+    return new SessionsApi($this->client, $plugin->getClientConfiguration());
   }
 
   /**
@@ -282,7 +305,7 @@ final class ApiManager {
    */
   public function getCapturesApi(OrderInterface $order) : CapturesApi {
     $plugin = $this->getPlugin($order);
-    return new CapturesApi(NULL, $plugin->getClientConfiguration());
+    return new CapturesApi($this->client, $plugin->getClientConfiguration());
   }
 
   /**
@@ -298,7 +321,7 @@ final class ApiManager {
    */
   public function getPaymentOrderApi(OrderInterface $order) : PaymentOrdersApi {
     $plugin = $this->getPlugin($order);
-    return new PaymentOrdersApi(NULL, $plugin->getClientConfiguration());
+    return new PaymentOrdersApi($this->client, $plugin->getClientConfiguration());
   }
 
   /**
@@ -314,7 +337,7 @@ final class ApiManager {
    */
   public function getOrderManagementApi(OrderInterface $order) : OrdersApi {
     $plugin = $this->getPlugin($order);
-    return new OrdersApi(NULL, $plugin->getClientConfiguration());
+    return new OrdersApi($this->client, $plugin->getClientConfiguration());
   }
 
   /**
