@@ -6,8 +6,7 @@ namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce\Response\NeedsRedirectException;
 use Drupal\commerce_checkout\CheckoutOrderManager;
-use Drupal\commerce_klarna_payments\Exception\FraudException;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
+use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Component\Utility\NestedArray;
@@ -17,6 +16,7 @@ use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\ApiException;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -43,16 +43,41 @@ class RedirectController implements ContainerInjectionInterface {
   protected $messenger;
 
   /**
+   * The logger.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $logger;
+
+  /**
+   * The api manager.
+   *
+   * @var \Drupal\commerce_klarna_payments\ApiManager
+   */
+  protected $apiManager;
+
+  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_checkout\CheckoutOrderManager $checkoutOrderManager
    *   The checkout order manager.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    *   The messenger.
+   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   *   The logger.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The api manager.
    */
-  public function __construct(CheckoutOrderManager $checkoutOrderManager, MessengerInterface $messenger) {
+  public function __construct(
+    CheckoutOrderManager $checkoutOrderManager,
+    MessengerInterface $messenger,
+    ApiManager $apiManager,
+    LoggerInterface $logger
+  ) {
     $this->checkoutOrderManager = $checkoutOrderManager;
     $this->messenger = $messenger;
+    $this->apiManager = $apiManager;
+    $this->logger = $logger;
   }
 
   /**
@@ -61,7 +86,9 @@ class RedirectController implements ContainerInjectionInterface {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('commerce_checkout.checkout_order_manager'),
-      $container->get('messenger')
+      $container->get('messenger'),
+      $container->get('commerce_klarna_payments.api_manager'),
+      $container->get('logger.channel.commerce_klarna_payments')
     );
   }
 
@@ -78,21 +105,17 @@ class RedirectController implements ContainerInjectionInterface {
    * @throws \Drupal\commerce\Response\NeedsRedirectException
    */
   public function handleRedirect(OrderInterface $commerce_order, PaymentGatewayInterface $commerce_payment_gateway, Request $request) {
-    /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
-    $plugin = $commerce_payment_gateway->getPlugin();
-
     $query = $request->request->all();
     $values = NestedArray::getValue($query, ['payment_process', 'offsite_payment']);
 
     if (empty($values['klarna_authorization_token'])) {
       $message = $this->t('Authorization token not set. This should only happen when Klarna order is incomplete.');
       // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order, $plugin, $message);
+      $this->redirectOnFailure($commerce_order, $message);
     }
 
     try {
-      $response = $plugin
-        ->getApiManager()
+      $response = $this->apiManager
         ->authorizeOrder($commerce_order, $values['klarna_authorization_token']);
 
       throw new NeedsRedirectException($response->getRedirectUrl());
@@ -100,12 +123,7 @@ class RedirectController implements ContainerInjectionInterface {
     catch (\InvalidArgumentException | ApiException $e) {
       $message = $this->t('Authorization validation failed. Please contact store administration if the problemn persists.');
       // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order, $plugin, $message, $e);
-    }
-    catch (FraudException $e) {
-      $message = $this->t('Fraudulent order detected. Please contact store administration if the problemn persists.');
-      // Redirect back to review step.
-      $this->redirectOnFailure($commerce_order, $plugin, $message, $e);
+      $this->redirectOnFailure($commerce_order, $message, $e);
     }
   }
 
@@ -114,8 +132,6 @@ class RedirectController implements ContainerInjectionInterface {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The payment plugin.
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup $message
    *   The error message.
    * @param \Exception|null $exception
@@ -123,7 +139,6 @@ class RedirectController implements ContainerInjectionInterface {
    */
   private function redirectOnFailure(
     OrderInterface $order,
-    Klarna $plugin,
     TranslatableMarkup $message,
     \Exception $exception = NULL
   ) : void {
@@ -136,7 +151,7 @@ class RedirectController implements ContainerInjectionInterface {
     }
     $loggerMessage .= sprintf('Order: %s', $order->id());
 
-    $plugin->getLogger()->critical($loggerMessage);
+    $this->logger->critical($loggerMessage);
     $this->messenger->addError($message);
 
     /** @var \Drupal\commerce_checkout\Entity\CheckoutFlowInterface $checkout_flow */

@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect;
 
+use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Form\FormStateInterface;
@@ -12,7 +13,6 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Exception;
-use Klarna\ObjectSerializer;
 
 /**
  * Provides the Klarna payments form.
@@ -22,6 +22,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
   use MessengerTrait;
   use DependencySerializationTrait;
   use StringTranslationTrait;
+  use ObjectSerializerTrait;
 
   /**
    * The payment.
@@ -64,7 +65,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
         '#attached' => [
           'library' => ['commerce_klarna_payments/klarna-js-sdk'],
           'drupalSettings' => [
-            'klarnaPayments' => (array) ObjectSerializer::sanitizeForSerialization($data),
+            'klarnaPayments' => $this->modelToArray($data),
           ],
         ],
       ];

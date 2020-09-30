@@ -8,6 +8,7 @@ use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
+use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
@@ -123,6 +124,8 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
         '@exception' => get_class($e),
         '@message' => $e->getMessage(),
       ]));
+      // Re-throw exception to prevent order from being completed.
+      throw $e;
     }
   }
 
@@ -167,7 +170,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     // Subscribe to every known transition phase that leads to 'completed'
     // state.
     foreach (['place', 'validate', 'fulfill'] as $transition) {
-      $events[sprintf('commerce_order.%s.post_transition', $transition)] = [['onOrderPlace']];
+      $events[sprintf('commerce_order.%s.pre_transition', $transition)] = [['onOrderPlace']];
     }
     $events['commerce_order.place.post_transition'][] = ['updateOrderNumberOnPlace'];
     return $events;

@@ -82,7 +82,7 @@ class RequestBuilder {
    */
   public function createSessionRequest(OrderInterface $order) : Session {
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
-    $plugin = $order->payment_gateway->entity->getplugin();
+    $plugin = $order->payment_gateway->entity->getPlugin();
 
     $session = new Session();
 
@@ -171,10 +171,7 @@ class RequestBuilder {
       ->setType('shipping_fee');
 
     foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
-      if (!$percentage = $taxAdjustment->getPercentage()) {
-        $percentage = '0';
-      }
-      $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
+      $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($taxAdjustment->getPercentage()))
         ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
     }
 
@@ -198,11 +195,7 @@ class RequestBuilder {
       ->setTotalAmount(UnitConverter::toAmount($item->getTotalPrice()));
 
     foreach ($item->getAdjustments(['tax']) as $adjustment) {
-      if (!$percentage = $adjustment->getPercentage()) {
-        $percentage = '0';
-      }
-
-      $orderItem->setTaxRate(UnitConverter::toTaxRate($percentage))
+      $orderItem->setTaxRate(UnitConverter::toTaxRate($adjustment->getPercentage()))
         ->setTotalTaxAmount(UnitConverter::toAmount($adjustment->getAmount()));
     }
 

@@ -168,17 +168,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the return url.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param string $routeName
-   *   The route.
-   * @param array $arguments
-   *   An additional arguments.
-   *
-   * @return string
-   *   The URL.
+   * {@inheritdoc}
    */
   public function getReturnUri(OrderInterface $order, string $routeName, array $arguments = []) : string {
     $arguments = array_merge($arguments, [

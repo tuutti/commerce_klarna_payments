@@ -4,10 +4,14 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
+use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayInterface;
+use Klarna\Configuration;
+
 /**
  * Provides Klarna API addresses.
  */
-interface KlarnaInterface {
+interface KlarnaInterface extends OffsitePaymentGatewayInterface {
 
   /**
    * List of regions.
@@ -28,6 +32,21 @@ interface KlarnaInterface {
       'test' => 'https://api-oc.playground.klarna.com',
     ],
   ];
+
+  /**
+   * Gets the return url.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param string $routeName
+   *   The route.
+   * @param array $arguments
+   *   An additional arguments.
+   *
+   * @return string
+   *   The URL.
+   */
+  public function getReturnUri(OrderInterface $order, string $routeName, array $arguments = []) : string;
 
   /**
    * Gets the region.
@@ -52,5 +71,13 @@ interface KlarnaInterface {
    *   The host.
    */
   public function getHost() : string;
+
+  /**
+   * Gets the client configuration.
+   *
+   * @return \Klarna\Configuration
+   *   The configuration.
+   */
+  public function getClientConfiguration() : Configuration;
 
 }

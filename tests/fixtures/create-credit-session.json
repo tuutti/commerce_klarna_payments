@@ -1,0 +1,14 @@
+{
+  "client_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJzZXNzaW9uX2lkIiA6ICIw",
+  "payment_method_categories": [
+    {
+      "asset_urls": {
+        "descriptive": "https://x.klarnacdn.net/payment-method/assets/badges/generic/klarna.svg",
+        "standard": "https://x.klarnacdn.net/payment-method/assets/badges/generic/klarna.svg"
+      },
+      "identifier": "pay_later",
+      "name": "Pay Later"
+    }
+  ],
+  "session_id": "0b1d9815-165e-42e2-8867-35bc03789e00"
+}
