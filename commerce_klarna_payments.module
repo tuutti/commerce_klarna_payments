@@ -5,6 +5,10 @@
  * Contains commerce_klarna_payments.module.
  */
 
+use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
+use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\Core\Form\FormStateInterface;
+
 /**
  * Implements hook_theme().
  */
@@ -16,4 +20,45 @@ function commerce_klarna_payments_theme($existing, $type, $theme, $path) {
   ];
 
   return $theme;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function commerce_klarna_payments_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if (strpos($form_id, 'state_machine_transition_form_commerce_order_state') === FALSE) {
+    return;
+  }
+  $order = Drupal::routeMatch()->getParameter('commerce_order');
+
+  if (!$order instanceof OrderInterface) {
+    return;
+  }
+
+  // Skip if order is paid or placed/canceled.
+  if ($order->isPaid() || $order->getState()->getId() === 'canceled') {
+    return;
+  }
+  /** @var \Drupal\commerce_klarna_payments\ApiManager $service */
+  $service = Drupal::service('commerce_klarna_payments.api_manager');
+
+  try {
+    $orderResponse = $service->getOrder($order);
+  }
+  catch (NonKlarnaOrderException $e) {
+    return;
+  }
+
+  if (!$service->orderIsInSync($order, $orderResponse)) {
+    Drupal::messenger()->addWarning(t('Order is out of sync with Klarna order. Use merchant panel to make any further changes to this order.'));
+  }
+
+  if ($orderResponse->getFraudStatus() === 'PENDING') {
+    Drupal::messenger()->addError(t('The fraud decision is in "pending" state. The review process is generally completed within 4 - 8 business hours, and can last a maximum of 24 hours.'));
+  }
+
+  if ($orderResponse->getFraudStatus() === 'REJECTED') {
+    Drupal::messenger()->addError(t('The fraud decision was rejected. Accepting a rejected order by capturing it will transfer the risk of the order to the merchant. If the order is not captured within 4 hours the order will be cancelled.'));
+  }
+
 }
