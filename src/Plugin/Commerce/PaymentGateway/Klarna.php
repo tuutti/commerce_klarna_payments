@@ -4,29 +4,24 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_klarna_payments\Event\Events;
-use Drupal\commerce_klarna_payments\Event\RequestEvent;
-use Drupal\commerce_klarna_payments\KlarnaConnector;
+use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\OptionsHelper;
+use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
-use Drupal\commerce_payment\PaymentMethodTypeManager;
-use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotificationsInterface;
 use Drupal\commerce_price\Price;
-use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
-use Klarna\Rest\Transport\ConnectorInterface;
+use Klarna\Configuration;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Finder\Exception\AccessDeniedException;
 use Symfony\Component\HttpFoundation\Request;
-use Webmozart\Assert\Assert;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Provides the Klarna payments payment gateway.
@@ -41,37 +36,16 @@ use Webmozart\Assert\Assert;
  *   requires_billing_information = FALSE
  * )
  */
-final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface {
+final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface, KlarnaInterface {
 
   use OptionsHelper;
 
   /**
-   * The key used for EU region.
+   * The klarna api manager.
    *
-   * @var string
+   * @var \Drupal\commerce_klarna_payments\ApiManager
    */
-  protected const REGION_EU = 'eu';
-
-  /**
-   * The key used for NA region.
-   *
-   * @var string
-   */
-  protected const REGION_NA = 'na';
-
-  /**
-   * The event dispatcher.
-   *
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
-   */
-  protected $eventDispatcher;
-
-  /**
-   * The klarna connector.
-   *
-   * @var \Drupal\commerce_klarna_payments\KlarnaConnector
-   */
-  protected $connector;
+  protected $apiManager;
 
   /**
    * The logger.
@@ -83,49 +57,41 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function __construct(
-    array $configuration,
-    string $plugin_id,
-    $plugin_definition,
-    EntityTypeManagerInterface $entity_type_manager,
-    PaymentTypeManager $payment_type_manager,
-    PaymentMethodTypeManager $payment_method_type_manager,
-    TimeInterface $time,
-    EventDispatcherInterface $eventDispatcher,
-    LoggerInterface $logger,
-    KlarnaConnector $connector
-  ) {
-    parent::__construct(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $entity_type_manager,
-      $payment_type_manager,
-      $payment_method_type_manager,
-      $time
-    );
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    /** @var self $instance */
+    $instance = parent::create($container, $configuration, $plugin_definition, $plugin_definition);
+    $instance->setApiManager($container->get('commerce_klarna_payments.api_manager'))
+      ->setLogger($container->get('logger.channel.commerce_klarna_payments'));
 
-    $this->eventDispatcher = $eventDispatcher;
-    $this->connector = $connector;
-    $this->logger = $logger;
+    return $instance;
   }
 
   /**
-   * {@inheritdoc}
+   * Sets the connector.
+   *
+   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   *   The connector.
+   *
+   * @return $this
+   *   The self.
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-    return new static(
-      $configuration,
-      $plugin_id,
-      $plugin_definition,
-      $container->get('entity_type.manager'),
-      $container->get('plugin.manager.commerce_payment_type'),
-      $container->get('plugin.manager.commerce_payment_method_type'),
-      $container->get('datetime.time'),
-      $container->get('event_dispatcher'),
-      $container->get('logger.channel.commerce_klarna_payments'),
-      $container->get('commerce_klarna_payments.connector')
-    );
+  public function setApiManager(ApiManager $apiManager) : self {
+    $this->apiManager = $apiManager;
+    return $this;
+  }
+
+  /**
+   * Sets the logger.
+   *
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The logger.
+   *
+   * @return $this
+   *   The self.
+   */
+  public function setLogger(LoggerInterface $logger) : self {
+    $this->logger = $logger;
+    return $this;
   }
 
   /**
@@ -136,6 +102,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       'mode' => 'test',
       'username' => '',
       'password' => '',
+      'region' => 'eu',
+      'cancel_fraudulent_orders' => FALSE,
       'options' => [],
     ] + parent::defaultConfiguration();
   }
@@ -143,11 +111,21 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * Gets the Klarna connector.
    *
-   * @return \Drupal\commerce_klarna_payments\KlarnaConnector
+   * @return \Drupal\commerce_klarna_payments\ApiManager
    *   The connector.
    */
-  public function getKlarnaConnector() : KlarnaConnector {
-    return $this->connector;
+  public function getApiManager() : ApiManager {
+    return $this->apiManager;
+  }
+
+  /**
+   * Whether to cancel fraudulent orders automatically.
+   *
+   * @return bool
+   *   TRUE if we should cancel fraudulent orders.
+   */
+  public function cancelFraudulentOrders() : bool {
+    return $this->configuration['cancel_fraudulent_orders'] === TRUE;
   }
 
   /**
@@ -161,20 +139,14 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the live mode status.
-   *
-   * @return bool
-   *   Boolean indicating whether we are operating in live mode.
+   * {@inheritdoc}
    */
   public function isLive() : bool {
     return $this->configuration['mode'] === 'live';
   }
 
   /**
-   * Gets the region.
-   *
-   * @return string
-   *   The region.
+   * {@inheritdoc}
    */
   public function getRegion() : string {
     return $this->configuration['region'];
@@ -207,27 +179,17 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    *   The entity id.
    */
   public function getEntityId() : string {
-    return $this->entityId;
+    return $this->parentEntity->id();
   }
 
   /**
-   * Gets the return url.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param string $routeName
-   *   The route.
-   * @param array $arguments
-   *   An additional arguments.
-   *
-   * @return string
-   *   The URL.
+   * {@inheritdoc}
    */
   public function getReturnUri(OrderInterface $order, string $routeName, array $arguments = []) : string {
     $arguments = array_merge($arguments, [
       'step' => 'payment',
       'commerce_order' => $order->id(),
-      'commerce_payment_gateway' => $this->entityId,
+      'commerce_payment_gateway' => $this->getEntityId(),
     ]);
 
     return (new Url($routeName, $arguments, ['absolute' => TRUE]))
@@ -235,16 +197,33 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the api uri.
-   *
-   * @return string
-   *   The api uri.
+   * {@inheritdoc}
    */
-  public function getApiUri() : string {
-    if ($this->getRegion() === static::REGION_EU) {
-      return $this->isLive() ? ConnectorInterface::EU_BASE_URL : ConnectorInterface::EU_TEST_BASE_URL;
+  public function getHost() : string {
+    $host = static::REGIONS[$this->getRegion()][$this->isLive() ? 'live' : 'test'] ?? '';
+
+    if ($host === '') {
+      throw new \InvalidArgumentException('Host not found.');
     }
-    return $this->isLive() ? ConnectorInterface::NA_BASE_URL : ConnectorInterface::NA_TEST_BASE_URL;
+    return $host;
+  }
+
+  /**
+   * Gets the client configuration.
+   *
+   * @return \Klarna\Configuration
+   *   The configuration.
+   */
+  public function getClientConfiguration() : Configuration {
+    $configuration = (new Configuration())
+      ->setUsername($this->getUsername())
+      ->setPassword($this->getPassword())
+      ->setUserAgent('Libary drupal-klarna-payments-v1');
+
+    $host = $this->getHost();
+    $configuration->setHost($host);
+
+    return $configuration;
   }
 
   /**
@@ -268,10 +247,19 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $form['region'] = [
       '#title' => $this->t('Region'),
       '#type' => 'select',
+      '#default_value' => $this->configuration['region'],
       '#options' => [
-        static::REGION_EU => $this->t('Europe'),
-        static::REGION_NA => $this->t('North America'),
+        'eu' => $this->t('Europe'),
+        'na' => $this->t('North America'),
+        'oc' => $this->t('Oceania'),
       ],
+    ];
+
+    $form['cancel_fraudulent_orders'] = [
+      '#title' => $this->t('Cancel fraudulent orders automatically (US & UK only)'),
+      '#type' => 'checkbox',
+      '#default_value' => $this->configuration['cancel_fraudulent_orders'],
+      '#description' => $this->t('Automatically cancel the Drupal order if Klarna deems the order fraudulent. <a href="@link">Read more.</a>', ['@link' => 'https://developers.klarna.com/documentation/order-management/pending-orders/#overriding-the-fraud-decision']),
     ];
 
     $form['options'] = [
@@ -307,41 +295,92 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    */
   public function onReturn(OrderInterface $order, Request $request) {
     try {
-      $klarnaOrder = $this->connector->getOrder($order);
+      $orderResponse = $this->apiManager->getOrder($order);
+
+      $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
+
+      if (!in_array($orderResponse->getStatus(), $allowed)) {
+        throw new PaymentGatewayException(
+          $this->t('Order is in invalid state [@state], one of @expected expected.', [
+            '@state' => $orderResponse->getStatus(),
+            '@expected' => implode(',', $allowed),
+          ])
+        );
+      }
+      $this->createPayment($order);
+      $this->apiManager->acknowledgeOrder($order, $orderResponse);
     }
     catch (\Exception $e) {
-      throw new PaymentGatewayException();
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+  }
+
+  /**
+   * Notify callback.
+   *
+   * This is only called if the fraud status was set to 'PENDING' during
+   * the authorization process.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response.
+   */
+  public function onNotify(Request $request) {
+    /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
+    if ((!$order_id = $request->query->get('commerce_order')) || !$order = Order::load($order_id)) {
+      throw new PaymentGatewayException('Order not found.');
+    }
+    $content = json_decode($request->getContent());
+
+    // Make sure our local order id matches with the one in payload.
+    if ((!isset($content->order_id, $content->event_type)) || $content->order_id !== $order->getData('klarna_order_id')) {
+      throw new AccessDeniedException('Order id mismatch.');
+    }
+    $this->apiManager->handleNotificationEvent($order, $content->event_type);
+
+    $statuses = [
+      'FRAUD_RISK_REJECTED',
+      'FRAUD_RISK_STOPPED',
+    ];
+    // Cancel the order if configured to do so.
+    if ($this->cancelFraudulentOrders() && in_array($content->event_type, $statuses)) {
+      $order->getState()->applyTransitionById('cancel');
+
+      $this->apiManager->voidPayment($order);
     }
 
-    try {
-      Assert::oneOf($klarnaOrder['status'], [
-        'AUTHORIZED',
-        'PART_CAPTURED',
-        'CAPTURED',
-      ]);
-    }
-    catch (\InvalidArgumentException $e) {
-      throw new PaymentGatewayException($this->t('Order is in invalid state [@state]', [
-        '@state' => $klarnaOrder['status'],
-      ]));
-    }
+    return new Response('', 200);
+  }
+
+  /**
+   * Creates new payment in 'authorize' state.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Drupal\commerce_price\Price|null $amount
+   *   The payment maount.
+   *
+   * @return \Drupal\commerce_payment\Entity\PaymentInterface
+   *   The payment.
+   */
+  public function createPayment(OrderInterface $order, Price $amount = NULL) : PaymentInterface {
     $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
 
     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
     $payment = $payment_storage->create([
-      'amount' => $order->getTotalPrice(),
-      'payment_gateway' => $this->entityId,
+      // If not specified, use the entire amount.
+      'amount' => $amount ?: $order->getBalance(),
+      'payment_gateway' => $this->parentEntity->id(),
       'order_id' => $order->id(),
-      'test' => $this->getMode() == 'test',
+      'test' => !$this->isLive(),
     ]);
+    $payment->getState()->applyTransitionById('authorize');
 
-    $transition = $payment->getState()->getWorkflow()->getTransition('authorize');
-    $payment->getState()->applyTransition($transition);
+    $payment->save();
 
-    $payment->setAuthorizedTime($this->time->getRequestTime())
-      ->save();
-
-    $klarnaOrder->acknowledge();
+    return $payment;
   }
 
   /**
@@ -352,29 +391,18 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
 
-    $order = $payment->getOrder();
-    $klarnaOrder = $this->connector->getOrder($order);
-
-    /** @var \Drupal\commerce_klarna_payments\Event\RequestEvent $request */
-    $request = $this->eventDispatcher
-      ->dispatch(Events::CAPTURE_CREATE, new RequestEvent($order));
-
     try {
-      $request->getRequest()
-        ->setCapturedAmount((int) $amount->multiply('100')->getNumber());
-      $capture = $klarnaOrder->createCapture($request->getRequest()->toArray());
-      $capture->fetch();
+      $capture = $this->apiManager->createCapture($payment->getOrder(), $amount);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
 
-    $transition = $payment->getState()->getWorkflow()->getTransition('capture');
-    $payment->getState()->applyTransition($transition);
+    $payment->getState()->applyTransitionById('capture');
 
-    $payment->setAmount($amount);
-    $payment->setRemoteId($capture->getId());
-    $payment->save();
+    $payment->setAmount($amount)
+      ->setRemoteId($capture->getCaptureId())
+      ->save();
   }
 
   /**
@@ -385,17 +413,14 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $order = $payment->getOrder();
 
     try {
-      $klarnaOrder = $this->connector->getOrder($order);
-      // @todo Find out, if a DELETE /payments/v1/authorizations/{authorizationToken}
-      // request would be better here.
-      $klarnaOrder->cancel();
+      $this->apiManager->voidPayment($order);
     }
     catch (\Exception $e) {
       throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
     }
 
-    $payment->setState('authorization_voided');
-    $payment->save();
+    $payment->setState('authorization_voided')
+      ->save();
   }
 
 }

@@ -10,6 +10,13 @@ namespace Drupal\commerce_klarna_payments\Event;
 final class Events {
 
   /**
+   * An event to be run when we acknownledge the order.
+   *
+   * @var string
+   */
+  public const ACKNOWLEDGE_ORDER = 'commerce_klarna_payments.acknowledge_order';
+
+  /**
    * An event to alter values before creating a new session.
    *
    * @var string
@@ -29,5 +36,40 @@ final class Events {
    * @var string
    */
   public const CAPTURE_CREATE = 'commerce_klarna_payments.capture_create';
+
+  /**
+   * An event to be run when we release the remaining authorizations.
+   *
+   * @var string
+   */
+  public const RELEASE_REMAINING_AUTHORIZATION = 'commerce_klarna_payments.release_remaining_authorization';
+
+  /**
+   * An event to be run when we void the given payment.
+   *
+   * @var string
+   */
+  public const VOID_PAYMENT = 'commerce_klarna_payments.void_payment';
+
+  /**
+   * This even is ran when fraud status is rejected.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_REJECTED = 'commerce_klarna_payments.fraud_notification_rejected';
+
+  /**
+   * This even is ran when fraud status is accepted.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_ACCEPTED = 'commerce_klarna_payments.fraud_notification_accepted';
+
+  /**
+   * This even is ran when fraud status is stopped.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_STOPPED = 'commerce_klarna_payments.fraud_notification_stopped';
 
 }

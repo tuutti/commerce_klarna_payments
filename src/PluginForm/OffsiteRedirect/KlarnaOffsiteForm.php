@@ -4,15 +4,15 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect;
 
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
+use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Messenger\MessengerTrait;
 use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Exception;
-use Klarna\Rest\Transport\Exception\ConnectorException;
 
 /**
  * Provides the Klarna payments form.
@@ -22,6 +22,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
   use MessengerTrait;
   use DependencySerializationTrait;
   use StringTranslationTrait;
+  use ObjectSerializerTrait;
 
   /**
    * The payment.
@@ -31,21 +32,14 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
   protected $entity;
 
   /**
-   * Gets the payment plugin.
-   *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   *   The payment plugin.
-   */
-  private function getPaymentPlugin() : Klarna {
-    return $this->entity->getPaymentGateway()->getPlugin();
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
-    $plugin = $this->getPaymentPlugin();
+    /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
+    $plugin = $this->entity
+      ->getPaymentGateway()
+      ->getPlugin();
 
     if (!$order = $this->entity->getOrder()) {
       $this->messenger()->addError(
@@ -54,19 +48,24 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
 
       return $form;
     }
-    $form = $this->buildRedirectForm($form, $form_state, $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect'));
+
+    $form = $this->buildRedirectForm(
+      $form,
+      $form_state,
+      $plugin->getReturnUri($order, 'commerce_klarna_payments.redirect')
+    );
 
     try {
-      $request = $plugin->getKlarnaConnector()->sessionRequest($order);
-      $data = $plugin->getKlarnaConnector()
-        ->buildTransaction($request, $order);
+      $data = $plugin->getApiManager()->sessionRequest($order);
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
+        // @todo Check if we can cache this.
+        '#cache' => ['max-age' => 0],
         '#attached' => [
           'library' => ['commerce_klarna_payments/klarna-js-sdk'],
           'drupalSettings' => [
-            'klarnaPayments' => $data,
+            'klarnaPayments' => $this->modelToArray($data),
           ],
         ],
       ];
@@ -84,46 +83,31 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
         // Trigger a form error so we can disable continue button.
         $form_state->setErrorByName('klarna_authorization_token');
       }
-
-      return $form;
-    }
-    catch (ConnectorException $e) {
-      // Session initialization failed.
-      $this->messenger()->addError(
-        $this->t('Failed to populate Klarna order. Please contact store administration if the problem persists.')
-      );
-      $plugin->getLogger()->error(
-        $this->t('Failed to populate Klara order #@id: @message', [
-          '@id' => $order->id(),
-          '@message' => $e->getMessage(),
-        ])
-      );
-
-      return $form;
     }
     catch (Exception $e) {
       $this->messenger()->addError(
         $this->t('An unknown error occurred. Please contact store administration if the problem persists.')
       );
 
-      $plugin->getLogger()->error(
-        $this->t('An error occurred for order #@id: @message', [
-          '@id' => $order->id(),
-          '@message' => $e->getMessage(),
-        ])
-      );
-
-      return $form;
+      $plugin->getLogger()
+        ->error(
+          $this->t('An error occurred for order #@id: [@exception]: @message', [
+            '@id' => $order->id(),
+            '@exception' => get_class($e),
+            '@message' => $e->getMessage(),
+          ])
+        );
     }
+
+    return $form;
   }
 
   /**
    * {@inheritdoc}
    */
-  public function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
+  protected function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
     $form['#process'][] = [get_class($this), 'processRedirectForm'];
     $form['#redirect_url'] = $redirect_url;
-    $form['#method'] = self::REDIRECT_GET;
 
     return $form;
   }
@@ -145,7 +129,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       // Append appropriate selector so we can disable the submit button until
       // we have authorization token.
       $complete_form['actions'][$name]['#attributes']['data-klarna-selector'] = 'submit';
-      $complete_form['actions'][$name]['#value'] = t('Continue');
+      $complete_form['actions'][$name]['#value'] = new TranslatableMarkup('Continue');
     }
     return $element;
   }

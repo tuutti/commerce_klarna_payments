@@ -1,0 +1,29 @@
+{
+  "name": "drupal-klarna-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "license": "GPL-2.0",
+  "engines": {
+    "node": ">=4.0.0"
+  },
+  "scripts": {
+    "watch": "webpack --watch --mode=development",
+    "build": "webpack --mode=production"
+  },
+  "keywords": [
+    "riot",
+    "webpack"
+  ],
+  "devDependencies": {
+    "@babel/core": "7.4.5",
+    "@babel/preset-env": "7.4.5",
+    "babel-loader": "^8.0.6",
+    "riot": "^4.0.5",
+    "@riotjs/compiler": "^4.2.5",
+    "@riotjs/hot-reload": "4.0.0",
+    "@riotjs/webpack-loader": "^4.0.0",
+    "webpack": "^4.33.0",
+    "webpack-cli": "^3.3.2"
+  }
+}
