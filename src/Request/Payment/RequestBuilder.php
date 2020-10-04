@@ -78,7 +78,6 @@ class RequestBuilder {
    *   The request data.
    *
    * @todo Support promotions.
-   * @todo Figure out what to do when order is in PENDING state.
    */
   public function createSessionRequest(OrderInterface $order) : Session {
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
@@ -194,6 +193,12 @@ class RequestBuilder {
       ->setUnitPrice(UnitConverter::toAmount($item->getAdjustedUnitPrice()))
       ->setTotalAmount(UnitConverter::toAmount($item->getTotalPrice()));
 
+    if ($purchasedEntity = $item->getPurchasedEntity()) {
+      // Use purchased entity type + id as reference. For example:
+      // commerce_product_variation:1.
+      $orderItem->setReference(sprintf('%s:%s', $purchasedEntity->getEntityTypeId(), $purchasedEntity->id()));
+    }
+
     foreach ($item->getAdjustments(['tax']) as $adjustment) {
       $orderItem->setTaxRate(UnitConverter::toTaxRate($adjustment->getPercentage()))
         ->setTotalTaxAmount(UnitConverter::toAmount($adjustment->getAmount()));
@@ -259,6 +264,8 @@ class RequestBuilder {
         'postal_code' => $address->getPostalCode(),
         'street_address' => $address->getAddressLine1(),
         'street_address2' => $address->getAddressLine2(),
+        'region' => $address->getAdministrativeArea(),
+        'organization_name' => $address->getOrganization(),
       ];
     }
 

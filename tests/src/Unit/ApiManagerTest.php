@@ -449,4 +449,43 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $sut->voidPayment($order->reveal());
   }
 
+  /**
+   * Tests handleNotifactionEvent().
+   *
+   * @covers ::handleNotificationEvent
+   * @dataProvider handleNotificationData
+   */
+  public function testHandleNotificationEvent(string $event, bool $invalid = FALSE) : void {
+    if ($invalid) {
+      $this->expectException(\InvalidArgumentException::class);
+    }
+    $order = $this->prophesize(OrderInterface::class);
+    $order->getData('klarna_order_id')
+      ->shouldBeCalled()
+      ->willReturn('123');
+
+    $this->populateOrderPluginStub($order);
+
+    $client = $this->createHttpClient([
+      new Response(200, [], $this->getFixture('get-order.json')),
+    ]);
+    $sut = $this->createSut($order->reveal(), new Order(), $client);
+    $sut->handleNotificationEvent($order->reveal(), $event);
+  }
+
+  /**
+   * Data provider for handleNotification() tests.
+   *
+   * @return \string[][]
+   *   The test data.
+   */
+  public function handleNotificationData() : array {
+    return [
+      ['nonexistent', TRUE],
+      ['FRAUD_RISK_ACCEPTED'],
+      ['FRAUD_RISK_REJECTED'],
+      ['FRAUD_RISK_STOPPED'],
+    ];
+  }
+
 }

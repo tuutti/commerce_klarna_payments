@@ -9,6 +9,7 @@ use Drupal\commerce_order\Adjustment;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\commerce_price\Price;
+use Drupal\commerce_product\Entity\ProductVariationInterface;
 use Drupal\commerce_shipping\Entity\ShipmentInterface;
 use Drupal\commerce_tax\Entity\TaxType;
 use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
@@ -263,7 +264,15 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $shipmentsList->referencedEntities()
       ->willReturn([$shipments->reveal()]);
 
+    $purchasedEntity = $this->prophesize(ProductVariationInterface::class);
+    $purchasedEntity->getEntityTypeId()
+      ->willReturn('commerce_product_variation');
+    $purchasedEntity->id()
+      ->willReturn('1');
+
     $orderItem = $this->prophesize(OrderItemInterface::class);
+    $orderItem->getPurchasedEntity()
+      ->willReturn($purchasedEntity);
     $orderItem->getTitle()
       ->willReturn('Title');
     $orderItem->getQuantity()
@@ -300,6 +309,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
         'quantity' => 1,
         'unit_price' => 1100,
         'total_amount' => 1100,
+        'reference' => 'commerce_product_variation:1',
       ],
       [
         'name' => 'Shipping',
@@ -338,6 +348,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
         'quantity' => 1,
         'unit_price' => 1100,
         'total_amount' => 1100,
+        'reference' => 'commerce_product_variation:1',
       ],
       [
         'name' => 'Shipping',

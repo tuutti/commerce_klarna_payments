@@ -51,4 +51,25 @@ final class Events {
    */
   public const VOID_PAYMENT = 'commerce_klarna_payments.void_payment';
 
+  /**
+   * This even is ran when fraud status is rejected.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_REJECTED = 'commerce_klarna_payments.fraud_notification_rejected';
+
+  /**
+   * This even is ran when fraud status is accepted.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_ACCEPTED = 'commerce_klarna_payments.fraud_notification_accepted';
+
+  /**
+   * This even is ran when fraud status is stopped.
+   *
+   * @var string
+   */
+  public const FRAUD_NOTIFICATION_STOPPED = 'commerce_klarna_payments.fraud_notification_stopped';
+
 }

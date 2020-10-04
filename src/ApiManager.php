@@ -175,6 +175,27 @@ final class ApiManager {
   }
 
   /**
+   * Checks whether Klarna order differs from Drupal order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Klarna\Model\Order|null $orderResponse
+   *   The order response.
+   *
+   * @return bool
+   *   TRUE if orders are in sync.
+   */
+  public function orderIsInSync(OrderInterface $order, Order $orderResponse = NULL) : bool {
+    if (!$orderResponse) {
+      $orderResponse = $this->getOrder($order);
+    }
+
+    return UnitConverter::toPrice($orderResponse->getOrderAmount(), $order->getTotalPrice()->getCurrencyCode())
+      ->equals($order->getTotalPrice());
+
+  }
+
+  /**
    * Releases the remaining authorizations for given order.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -186,12 +207,11 @@ final class ApiManager {
    * @throws \Klarna\ApiException
    */
   public function releaseRemainingAuthorization(OrderInterface $order, Order $orderResponse = NULL) : void {
-    $this->eventDispatcher
-      ->dispatch(Events::RELEASE_REMAINING_AUTHORIZATION, new RequestEvent($order));
-
     if (!$orderResponse) {
       $orderResponse = $this->getOrder($order);
     }
+    $this->eventDispatcher
+      ->dispatch(Events::RELEASE_REMAINING_AUTHORIZATION, new RequestEvent($order, $orderResponse));
 
     $this
       ->getOrderManagementApi($order)
@@ -210,12 +230,11 @@ final class ApiManager {
    * @throws \Klarna\ApiException
    */
   public function acknowledgeOrder(OrderInterface $order, Order $orderResponse = NULL) : void {
-    $this->eventDispatcher
-      ->dispatch(Events::ACKNOWLEDGE_ORDER, new RequestEvent($order));
-
     if (!$orderResponse) {
       $orderResponse = $this->getOrder($order);
     }
+    $this->eventDispatcher
+      ->dispatch(Events::ACKNOWLEDGE_ORDER, new RequestEvent($order, $orderResponse));
 
     $this->getOrderManagementApi($order)->acknowledgeOrder($orderResponse->getOrderId());
   }
@@ -230,10 +249,10 @@ final class ApiManager {
    * @throws \Klarna\ApiException
    */
   public function voidPayment(OrderInterface $order) : void {
-    $this->eventDispatcher
-      ->dispatch(Events::VOID_PAYMENT, new RequestEvent($order));
-
     $orderResponse = $this->getOrder($order);
+
+    $this->eventDispatcher
+      ->dispatch(Events::VOID_PAYMENT, new RequestEvent($order, $orderResponse));
 
     $this->getOrderManagementApi($order)->cancelOrder($orderResponse->getOrderId());
   }
@@ -274,6 +293,31 @@ final class ApiManager {
       ->save();
 
     return $response;
+  }
+
+  /**
+   * Handles to notification event.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param string $fraudStatus
+   *   The fraud status.
+   */
+  public function handleNotificationEvent(OrderInterface $order, string $fraudStatus) : void {
+    $orderResponse = $this->getOrder($order);
+
+    $statusMap = [
+      'FRAUD_RISK_ACCEPTED' => Events::FRAUD_NOTIFICATION_ACCEPTED,
+      'FRAUD_RISK_REJECTED' => Events::FRAUD_NOTIFICATION_REJECTED,
+      'FRAUD_RISK_STOPPED' => Events::FRAUD_NOTIFICATION_STOPPED,
+    ];
+
+    if (!isset($statusMap[$fraudStatus])) {
+      throw new \InvalidArgumentException('Invalid fraud status.');
+    }
+
+    $this->eventDispatcher
+      ->dispatch($statusMap[$fraudStatus], new RequestEvent($order, $orderResponse));
   }
 
   /**

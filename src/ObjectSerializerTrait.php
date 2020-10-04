@@ -26,6 +26,34 @@ trait ObjectSerializerTrait {
   }
 
   /**
+   * Converts json string to a model.
+   *
+   * @param string $json
+   *   The json.
+   * @param string $class
+   *   The class.
+   *
+   * @return \Klarna\Model\ModelInterface
+   *   The model.
+   */
+  protected function jsonToModel(string $json, string $class) : ModelInterface {
+    return ObjectSerializer::deserialize($json, $class);
+  }
+
+  /**
+   * Converts the given model to json.
+   *
+   * @param \Klarna\Model\ModelInterface $model
+   *   The model.
+   *
+   * @return string
+   *   The json.
+   */
+  protected function modelToJson(ModelInterface $model) : string {
+    return json_encode($this->modelToArray($model));
+  }
+
+  /**
    * Converts multiple models to array.
    *
    * @param \Klarna\Model\ModelInterface[] $models
