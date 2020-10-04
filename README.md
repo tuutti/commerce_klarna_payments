@@ -1,6 +1,6 @@
 # Commerce Klarna Payments
 
-[![Build Status](https://gitlab.com/tuutti/commerce_klarna_payments/badges/8.x-1.x/pipeline.svg)](https://gitlab.com/tuutti/commerce_klarna_payments)
+[![Build Status](https://gitlab.com/tuutti/commerce_klarna_payments/badges/8.x-2.x/pipeline.svg)](https://gitlab.com/tuutti/commerce_klarna_payments)
 
 ## Description
 
