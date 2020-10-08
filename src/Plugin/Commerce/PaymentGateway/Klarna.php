@@ -109,16 +109,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the Klarna connector.
-   *
-   * @return \Drupal\commerce_klarna_payments\ApiManager
-   *   The connector.
-   */
-  public function getApiManager() : ApiManager {
-    return $this->apiManager;
-  }
-
-  /**
    * Whether to cancel fraudulent orders automatically.
    *
    * @return bool
@@ -126,16 +116,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    */
   public function cancelFraudulentOrders() : bool {
     return $this->configuration['cancel_fraudulent_orders'] === TRUE;
-  }
-
-  /**
-   * Gets the logger.
-   *
-   * @return \Psr\Log\LoggerInterface
-   *   The logger.
-   */
-  public function getLogger() : LoggerInterface {
-    return $this->logger;
   }
 
   /**

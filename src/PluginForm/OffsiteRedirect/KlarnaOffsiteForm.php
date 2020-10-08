@@ -4,22 +4,25 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect;
 
+use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm;
+use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Messenger\MessengerTrait;
+use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Exception;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Provides the Klarna payments form.
  */
-final class KlarnaOffsiteForm extends PaymentOffsiteForm {
+final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInjectionInterface {
 
-  use MessengerTrait;
   use DependencySerializationTrait;
   use StringTranslationTrait;
   use ObjectSerializerTrait;
@@ -32,6 +35,54 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
   protected $entity;
 
   /**
+   * The logger.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  private $logger;
+
+  /**
+   * The api manager.
+   *
+   * @var \Drupal\commerce_klarna_payments\ApiManager
+   */
+  private $apiManager;
+
+  /**
+   * The messenger.
+   *
+   * @var \Drupal\Core\Messenger\MessengerInterface
+   */
+  private $messenger;
+
+  /**
+   * Constructs a new instance.
+   *
+   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   *   The api manager.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The logger.
+   * @param \Drupal\Core\Messenger\MessengerInterface $messenger
+   *   The messenger.
+   */
+  public function __construct(ApiManager $apiManager, LoggerInterface $logger, MessengerInterface $messenger) {
+    $this->apiManager = $apiManager;
+    $this->logger = $logger;
+    $this->messenger = $messenger;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container) {
+    return new static(
+      $container->get('commerce_klarna_payments.api_manager'),
+      $container->get('logger.channel.commerce_klarna_payments'),
+      $container->get('messenger')
+    );
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
@@ -42,7 +93,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       ->getPlugin();
 
     if (!$order = $this->entity->getOrder()) {
-      $this->messenger()->addError(
+      $this->messenger->addError(
         $this->t('The provided payment has no order referenced. Please contact store administration if the problem persists.')
       );
 
@@ -56,7 +107,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
     );
 
     try {
-      $data = $plugin->getApiManager()->sessionRequest($order);
+      $data = $this->apiManager->sessionRequest($order);
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
@@ -77,7 +128,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       ];
 
       if (empty($data['payment_method_categories'])) {
-        $this->messenger()->addError(
+        $this->messenger->addError(
           $this->t('No payment method categories found. Usually this means that Klarna is not supported in the given country. Please contact store administration if you think this is an error.')
         );
         // Trigger a form error so we can disable continue button.
@@ -85,11 +136,11 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm {
       }
     }
     catch (Exception $e) {
-      $this->messenger()->addError(
+      $this->messenger->addError(
         $this->t('An unknown error occurred. Please contact store administration if the problem persists.')
       );
 
-      $plugin->getLogger()
+      $this->logger
         ->error(
           $this->t('An error occurred for order #@id: [@exception]: @message', [
             '@id' => $order->id(),
