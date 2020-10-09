@@ -114,7 +114,7 @@ final class ApiManager {
    */
   public function getOrder(OrderInterface $order) : Order {
     if (!$orderId = $order->getData('klarna_order_id')) {
-      throw new \InvalidArgumentException('Order ID not set.');
+      throw new NonKlarnaOrderException('Order ID not set.');
     }
 
     return $this->getOrderManagementApi($order)

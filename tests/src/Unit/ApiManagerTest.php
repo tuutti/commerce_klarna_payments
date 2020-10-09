@@ -313,7 +313,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    * @cover ::getOrder
    */
   public function testGetOrderNoOrder() : void {
-    $this->expectException(\InvalidArgumentException::class);
+    $this->expectException(NonKlarnaOrderException::class);
 
     $order = $this->prophesize(OrderInterface::class);
     $order->getData('klarna_order_id')
@@ -381,18 +381,27 @@ class ApiManagerTest extends FixtureUnitTestBase {
    */
   public function testCreateCaptureException() : void {
     $this->expectException(\InvalidArgumentException::class);
-    $order = $this->prophesize(OrderInterface::class)->reveal();
+    $order = $this->prophesize(OrderInterface::class);
+    $order->getData('klarna_order_id')
+      ->shouldBeCalled()
+      ->willReturn('123');
+
+    $this->populateOrderPluginStub($order);
+
+    $client = $this->createHttpClient([
+      new Response(200, [], $this->getFixture('get-order.json')),
+    ]);
 
     $requestBuilder = $this->prophesize(RequestBuilder::class);
-    $requestBuilder->createCaptureRequest($order)->willReturn(new Capture());
+    $requestBuilder->createCaptureRequest($order->reveal())->willReturn(new Capture());
 
     // Override the capture via event dispatcher event.
     $eventDispatcher = $this->prophesize(EventDispatcherInterface::class);
     $eventDispatcher->dispatch(Argument::any(), Argument::any())
-      ->willReturn(new RequestEvent($order, new Order()));
+      ->willReturn(new RequestEvent($order->reveal(), new Order()));
 
-    $sut = new ApiManager($eventDispatcher->reveal(), $requestBuilder->reveal());
-    $sut->createCapture($order);
+    $sut = new ApiManager($eventDispatcher->reveal(), $requestBuilder->reveal(), $client);
+    $sut->createCapture($order->reveal());
   }
 
   /**
