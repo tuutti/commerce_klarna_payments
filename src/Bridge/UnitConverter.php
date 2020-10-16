@@ -20,12 +20,22 @@ final class UnitConverter {
    *
    * @param \Drupal\commerce_price\Price $price
    *   The price to convert.
+   * @param bool $convertPositive
+   *   Whether to convert negative values to positive.
    *
    * @return int
    *   The amount.
    */
-  public static function toAmount(Price $price) : int {
-    return (int) $price->multiply('100')->getNumber();
+  public static function toAmount(Price $price, bool $convertPositive = FALSE) : int {
+    $price = $price->multiply('100');
+
+    // Convert negative values to positive.
+    // This is useful for converting discounts to positive.
+    // For example -100e discount = 10000.
+    if ($convertPositive && $price->isNegative()) {
+      $price = $price->multiply('-1');
+    }
+    return (int) $price->getNumber();
   }
 
   /**

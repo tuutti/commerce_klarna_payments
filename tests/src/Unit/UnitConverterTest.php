@@ -19,8 +19,8 @@ class UnitConverterTest extends UnitTestCase {
    *
    * @dataProvider toAmountData
    */
-  public function testToAmount(Price $price, int $expected) {
-    $this->assertEquals(UnitConverter::toAmount($price), $expected);
+  public function testToAmount(Price $price, bool $positive, int $expected) {
+    $this->assertEquals($expected, UnitConverter::toAmount($price, $positive));
   }
 
   /**
@@ -31,11 +31,30 @@ class UnitConverterTest extends UnitTestCase {
    */
   public function toAmountData() : array {
     return [
-      [new Price('100', 'USD'), 10000],
-      [new Price('100.5', 'USD'), 10050],
-      [new Price('100.55', 'USD'), 10055],
-      [new Price('100.555', 'USD'), 10055],
-      [new Price('100.55999999', 'USD'), 10055],
+      // Positive numbers.
+      [new Price('100', 'USD'), FALSE, 10000],
+      [new Price('100.5', 'USD'), FALSE, 10050],
+      [new Price('100.55', 'USD'), FALSE, 10055],
+      [new Price('100.555', 'USD'), FALSE, 10055],
+      [new Price('100.55999999', 'USD'), FALSE, 10055],
+      // Positive numbers when we don't convert to positive number.
+      [new Price('100', 'USD'), TRUE, 10000],
+      [new Price('100.5', 'USD'), TRUE, 10050],
+      [new Price('100.55', 'USD'), TRUE, 10055],
+      [new Price('100.555', 'USD'), TRUE, 10055],
+      [new Price('100.55999999', 'USD'), TRUE, 10055],
+      // Negative numbers without converting to positive number.
+      [new Price('-100', 'USD'), FALSE, -10000],
+      [new Price('-100.5', 'USD'), FALSE, -10050],
+      [new Price('-100.55', 'USD'), FALSE, -10055],
+      [new Price('-100.555', 'USD'), FALSE, -10055],
+      [new Price('-100.55999999', 'USD'), FALSE, -10055],
+      // Negative numbers when we convert to positive.
+      [new Price('-100', 'USD'), TRUE, 10000],
+      [new Price('-100.5', 'USD'), TRUE, 10050],
+      [new Price('-100.55', 'USD'), TRUE, 10055],
+      [new Price('-100.555', 'USD'), TRUE, 10055],
+      [new Price('-100.55999999', 'USD'), TRUE, 10055],
     ];
   }
 
@@ -45,7 +64,7 @@ class UnitConverterTest extends UnitTestCase {
    * @dataProvider toTaxRateData
    */
   public function testToTaxRate(string $percentage, int $expected) {
-    $this->assertEquals(UnitConverter::toTaxRate($percentage), $expected);
+    $this->assertEquals($expected, UnitConverter::toTaxRate($percentage));
   }
 
   /**
@@ -71,7 +90,7 @@ class UnitConverterTest extends UnitTestCase {
    * @dataProvider toPriceData
    */
   public function testToPrice(int $amount, Price $expected) {
-    $this->assertEquals(UnitConverter::toPrice($amount, 'USD')->getNumber(), $expected->getNumber());
+    $this->assertEquals($expected->getNumber(), UnitConverter::toPrice($amount, 'USD')->getNumber());
   }
 
   /**
