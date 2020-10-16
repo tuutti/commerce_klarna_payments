@@ -36,7 +36,12 @@ class RequestBuilderTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  public static $modules = ['address', 'commerce_tax', 'commerce_shipping'];
+  public static $modules = [
+    'address',
+    'commerce_tax',
+    'commerce_shipping',
+    'commerce_promotion',
+  ];
 
   /**
    * {@inheritdoc}
@@ -44,8 +49,8 @@ class RequestBuilderTest extends KlarnaKernelBase {
   public function setUp() {
     parent::setUp();
 
-    $this->installConfig('address');
-    $this->installConfig('commerce_tax');
+    $this->installConfig(['commerce_promotion', 'commerce_tax', 'address']);
+    $this->installEntitySchema('commerce_promotion');
 
     $this->sut = $this->container->get('commerce_klarna_payments.request_builder');
   }
@@ -99,8 +104,9 @@ class RequestBuilderTest extends KlarnaKernelBase {
   public function testCreateSessionRequestTaxIncludedInPrices() : void {
     $this->createTaxType();
     $this->store->set('prices_include_tax', TRUE)->save();
+    $order = $this->reloadEntity($this->createOrder());
 
-    $request = $this->sut->createSessionRequest($this->createOrder());
+    $request = $this->sut->createSessionRequest($order);
 
     $expected = [
       'purchase_country' => 'FI',
@@ -133,7 +139,8 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $this->createTaxType();
     $this->store->set('prices_include_tax', FALSE)->save();
 
-    $request = $this->sut->createSessionRequest($this->createOrder());
+    $order = $this->reloadEntity($this->createOrder());
+    $request = $this->sut->createSessionRequest($order);
 
     $expected = [
       'purchase_country' => 'FI',
@@ -279,7 +286,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
       ->willReturn(1);
     $orderItem->getAdjustedUnitPrice()
       ->willReturn(new Price('11', 'EUR'));
-    $orderItem->getTotalPrice()
+    $orderItem->getAdjustedTotalPrice()
       ->willReturn(new Price('11', 'EUR'));
     $orderItem->getAdjustments(['tax'])
       ->willReturn([]);
@@ -389,6 +396,47 @@ class RequestBuilderTest extends KlarnaKernelBase {
 
       $this->assertEquals($expected, $request->getLocale());
     }
+  }
+
+  /**
+   * Make sure order level promotions are calculated correctly.
+   */
+  public function testOrderPromotion() : void {
+    $order = $this->createOrder();
+    $order->addAdjustment(new Adjustment(
+      [
+        'type' => 'promotion',
+        'label' => 'D',
+        'amount' => new Price('-1.1', 'EUR'),
+        'percentage' => '10',
+      ]
+    ));
+    $order->save();
+    $this->reloadEntity($order);
+
+    $request = $this->sut->createSessionRequest($order);
+    $this->assertEquals(990, $request->getOrderAmount());
+  }
+
+  /**
+   * Tests order item promotions.
+   */
+  public function testOrderItemPromotion() : void {
+    $order = $this->createOrder([
+      new Adjustment(
+        [
+          'type' => 'custom',
+          'label' => 'D',
+          'amount' => new Price('-1.1', 'EUR'),
+        ]
+      ),
+    ]);
+    $order = $this->reloadEntity($order);
+
+    $request = $this->sut->createSessionRequest($order);
+    $this->assertEquals(990, $request->getOrderAmount());
+    $this->assertEquals(990, $request->getOrderLines()[0]->getUnitPrice());
+    $this->assertEquals(990, $request->getOrderLines()[0]->getTotalAmount());
   }
 
 }

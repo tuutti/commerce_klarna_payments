@@ -191,7 +191,7 @@ class RequestBuilder {
       ->setName($item->getTitle())
       ->setQuantity((int) $item->getQuantity())
       ->setUnitPrice(UnitConverter::toAmount($item->getAdjustedUnitPrice()))
-      ->setTotalAmount(UnitConverter::toAmount($item->getTotalPrice()));
+      ->setTotalAmount(UnitConverter::toAmount($item->getAdjustedTotalPrice()));
 
     if ($purchasedEntity = $item->getPurchasedEntity()) {
       // Use purchased entity type + id as reference. For example:

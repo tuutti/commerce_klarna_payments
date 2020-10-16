@@ -121,7 +121,9 @@ abstract class KlarnaKernelBase extends CommerceKernelTestBase {
       'store_id' => $this->store,
       'payment_gateway' => $this->gateway,
     ]);
-    $order->addItem($orderItem);
+
+    $order->addItem($orderItem)
+      ->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
 
     if ($data) {
       foreach ($data as $key => $value) {
