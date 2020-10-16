@@ -104,8 +104,9 @@ class RequestBuilderTest extends KlarnaKernelBase {
   public function testCreateSessionRequestTaxIncludedInPrices() : void {
     $this->createTaxType();
     $this->store->set('prices_include_tax', TRUE)->save();
+    $order = $this->reloadEntity($this->createOrder());
 
-    $request = $this->sut->createSessionRequest($this->createOrder());
+    $request = $this->sut->createSessionRequest($order);
 
     $expected = [
       'purchase_country' => 'FI',
@@ -138,7 +139,8 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $this->createTaxType();
     $this->store->set('prices_include_tax', FALSE)->save();
 
-    $request = $this->sut->createSessionRequest($this->createOrder());
+    $order = $this->reloadEntity($this->createOrder());
+    $request = $this->sut->createSessionRequest($order);
 
     $expected = [
       'purchase_country' => 'FI',
@@ -413,7 +415,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $this->reloadEntity($order);
 
     $request = $this->sut->createSessionRequest($order);
-    $this->assertEqual(990, $request->getOrderAmount());
+    $this->assertEquals(990, $request->getOrderAmount());
   }
 
   /**
@@ -423,17 +425,18 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $order = $this->createOrder([
       new Adjustment(
         [
-          'type' => 'promotion',
+          'type' => 'custom',
           'label' => 'D',
           'amount' => new Price('-1.1', 'EUR'),
-          'percentage' => '10',
         ]
       ),
     ]);
+    $order = $this->reloadEntity($order);
 
     $request = $this->sut->createSessionRequest($order);
-    $this->assertEqual(990, $request->getOrderLines()[0]->getUnitPrice());
-    $this->assertEqual(990, $request->getOrderLines()[0]->getTotalAmount());
+    $this->assertEquals(990, $request->getOrderAmount());
+    $this->assertEquals(990, $request->getOrderLines()[0]->getUnitPrice());
+    $this->assertEquals(990, $request->getOrderLines()[0]->getTotalAmount());
   }
 
 }
