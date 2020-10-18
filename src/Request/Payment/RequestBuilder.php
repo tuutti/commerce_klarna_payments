@@ -11,12 +11,12 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Klarna\Model\Capture;
-use Klarna\Model\MerchantUrls;
-use Klarna\Model\Options;
-use Klarna\Model\Ordersaddress;
-use Klarna\Model\OrdersorderLine;
-use Klarna\Model\Session;
+use Klarna\OrderManagement\Model\Capture;
+use Klarna\Payments\Model\MerchantUrls;
+use Klarna\Payments\Model\Options;
+use Klarna\Payments\Model\Address;
+use Klarna\Payments\Model\OrderLine;
+use Klarna\Payments\Model\Session;
 use Webmozart\Assert\Assert;
 
 /**
@@ -51,7 +51,7 @@ class RequestBuilder {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Model\Capture
+   * @return \Klarna\OrderManagement\Model\Capture
    *   The capture object.
    */
   public function createCaptureRequest(OrderInterface $order) : Capture {
@@ -74,7 +74,7 @@ class RequestBuilder {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Model\Session
+   * @return \Klarna\Payments\Model\Session
    *   The request data.
    *
    * @todo Support promotions.
@@ -152,15 +152,15 @@ class RequestBuilder {
    * @param \Drupal\commerce_shipping\Entity\ShipmentInterface $shipment
    *   The shipment.
    *
-   * @return \Klarna\Model\OrdersorderLine
+   * @return \Klarna\Payments\Model\OrderLine
    *   The order line.
    */
-  protected function createShipmentOrderLine($shipment) : OrdersorderLine {
+  protected function createShipmentOrderLine($shipment) : OrderLine {
     Assert::isInstanceOf($shipment, '\Drupal\commerce_shipping\Entity\ShipmentInterface');
 
     $amount = UnitConverter::toAmount($shipment->getAmount());
 
-    $shippingOrderItem = (new OrdersorderLine())
+    $shippingOrderItem = (new OrderLine())
       // We use the same label the shipping adjustments are using,
       // which is better than the generic shipment labels.
       ->setName((string) new TranslatableMarkup('Shipping'))
@@ -183,11 +183,11 @@ class RequestBuilder {
    * @param \Drupal\commerce_order\Entity\OrderItemInterface $item
    *   The order item to create order line from.
    *
-   * @return \Klarna\Model\OrdersorderLine
+   * @return \Klarna\Payments\Model\OrderLine
    *   The order line item.
    */
-  protected function createOrderLine(OrderItemInterface $item) : OrdersorderLine {
-    $orderItem = (new OrdersorderLine())
+  protected function createOrderLine(OrderItemInterface $item) : OrderLine {
+    $orderItem = (new OrderLine())
       ->setName($item->getTitle())
       ->setQuantity((int) $item->getQuantity())
       ->setUnitPrice(UnitConverter::toAmount($item->getAdjustedUnitPrice()))
@@ -240,7 +240,7 @@ class RequestBuilder {
    * @return array|null
    *   The billing address or null.
    */
-  protected function getAddress(OrderInterface $order, string $type) : ? Ordersaddress {
+  protected function getAddress(OrderInterface $order, string $type) : ? Address {
     $profiles = $order->collectProfiles();
 
     if (empty($profiles[$type])) {
@@ -269,7 +269,7 @@ class RequestBuilder {
       ];
     }
 
-    return new Ordersaddress(array_filter($data));
+    return new Address(array_filter($data));
   }
 
 }

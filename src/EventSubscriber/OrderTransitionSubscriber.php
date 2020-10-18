@@ -14,8 +14,8 @@ use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
-use Klarna\Model\Order;
-use Klarna\Model\UpdateMerchantReferences;
+use Klarna\OrderManagement\Model\Order;
+use Klarna\OrderManagement\Model\UpdateMerchantReferences;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
@@ -87,10 +87,12 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Klarna\Model\Order $orderResponse
+   * @param \Klarna\OrderManagement\Model\Order $orderResponse
    *   The order response.
    * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
    *   The payment plugin.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
    */
   private function syncPayments(OrderInterface $order, Order $orderResponse, Klarna $plugin) : void {
     $payment = $this->getPayment($order);
