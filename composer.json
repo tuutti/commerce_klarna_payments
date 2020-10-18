@@ -18,7 +18,7 @@
     ],
     "require": {
         "php": ">=7.1",
-        "tuutti/php-klarna": "*@dev",
+        "tuutti/php-klarna": "^1.0.0",
         "webmozart/assert": "*",
         "drupal/commerce": "^2"
     }
