@@ -12,8 +12,8 @@ use Drupal\commerce_order\Entity\OrderType;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_price\Price;
 use GuzzleHttp\Psr7\Response;
-use Klarna\Model\Capture;
-use Klarna\Model\Order;
+use Klarna\OrderManagement\Model\Capture;
+use Klarna\OrderManagement\Model\Order;
 
 /**
  * Request builder tests.

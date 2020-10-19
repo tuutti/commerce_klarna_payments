@@ -14,16 +14,16 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
 use GuzzleHttp\Client;
 use InvalidArgumentException;
-use Klarna\Api\CapturesApi;
-use Klarna\Api\OrdersApi;
-use Klarna\Api\PaymentOrdersApi;
-use Klarna\Api\SessionsApi;
+use Klarna\OrderManagement\Api\CapturesApi;
+use Klarna\OrderManagement\Api\OrdersApi;
+use Klarna\Payments\Api\OrdersApi as PaymentOrdersApi;
+use Klarna\Payments\Api\SessionsApi;
 use Klarna\ApiException;
-use Klarna\Model\Capture;
-use Klarna\Model\CreateOrderRequest;
-use Klarna\Model\Order;
-use Klarna\Model\PaymentOrder;
-use Klarna\Model\Session;
+use Klarna\OrderManagement\Model\Capture;
+use Klarna\Payments\Model\CreateOrderRequest;
+use Klarna\OrderManagement\Model\Order;
+use Klarna\Payments\Model\Order as PaymentOrder;
+use Klarna\Payments\Model\Session;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -129,7 +129,7 @@ final class ApiManager {
    * @param \Drupal\commerce_price\Price|null $amount
    *   The amount.
    *
-   * @return \Klarna\Model\Capture
+   * @return \Klarna\OrderManagement\Model\Capture
    *   The capture.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -179,11 +179,13 @@ final class ApiManager {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Klarna\Model\Order|null $orderResponse
+   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
    *   The order response.
    *
    * @return bool
    *   TRUE if orders are in sync.
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function orderIsInSync(OrderInterface $order, Order $orderResponse = NULL) : bool {
     if (!$orderResponse) {
@@ -200,7 +202,7 @@ final class ApiManager {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order to release authorizations.
-   * @param \Klarna\Model\Order|null $orderResponse
+   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
    *   The order response.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -223,7 +225,7 @@ final class ApiManager {
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
-   * @param \Klarna\Model\Order|null $orderResponse
+   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
    *   The order response.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -265,7 +267,7 @@ final class ApiManager {
    * @param string $authorizeToken
    *   The authorize token.
    *
-   * @return \Klarna\Model\PaymentOrder
+   * @return \Klarna\Payments\Model\Order
    *   The authorization response.
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
@@ -326,9 +328,10 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Api\SessionsApi
+   * @return \Klarna\Payments\Api\SessionsApi
    *   The Sessions api request.
    *
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getSessionsApi(OrderInterface $order) : SessionsApi {
@@ -342,9 +345,10 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Api\CapturesApi
+   * @return \Klarna\OrderManagement\Api\CapturesApi
    *   The captures api request.
    *
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getCapturesApi(OrderInterface $order) : CapturesApi {
@@ -358,9 +362,10 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Api\PaymentOrdersApi
+   * @return \Klarna\Payments\Api\OrdersApi
    *   The payment order api request.
    *
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getPaymentOrderApi(OrderInterface $order) : PaymentOrdersApi {
@@ -374,9 +379,10 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Api\OrdersApi
+   * @return \Klarna\OrderManagement\Api\OrdersApi
    *   The orders api request.
    *
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getOrderManagementApi(OrderInterface $order) : OrdersApi {
@@ -390,10 +396,11 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Model\Session
+   * @return \Klarna\Payments\Model\Session
    *   The session response.
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
    */
