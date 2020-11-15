@@ -1,5 +1,7 @@
 before_script:
-- ./.gitlab-ci/setup.sh
+- export PATH=$HOME/.composer/vendor/bin:$PATH
+- composer global require tuutti/drupal-test-runner ^1.0
+- drupal-tr
 
 services:
 - mariadb:latest
@@ -13,28 +15,29 @@ variables:
   MYSQL_DATABASE: drupal
   MYSQL_ROOT_PASSWORD: drupal
   SIMPLETEST_DB: mysql://root:drupal@mariadb/drupal
+  TEST_RUNNER: core
 
 test:7.1:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.1
   variables:
     DRUPAL_CORE: 8.8.x
   script:
-    - php ~/drupal/core/scripts/run-tests.sh --verbose --color --url "$DRUPAL_SERVER_HOST:$DRUPAL_SERVER_PORT" $DRUPAL_MODULE_NAME
+    - drupal-tr run-tests
 
 test:7.2:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.2
   script:
-    - php ~/drupal/core/scripts/run-tests.sh --verbose --color --url "$DRUPAL_SERVER_HOST:$DRUPAL_SERVER_PORT" $DRUPAL_MODULE_NAME
+    - drupal-tr run-tests
 
 test:7.3:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.3
   script:
-    - php ~/drupal/core/scripts/run-tests.sh --verbose --color --url "$DRUPAL_SERVER_HOST:$DRUPAL_SERVER_PORT" $DRUPAL_MODULE_NAME
+    - drupal-tr run-tests
 
 test:7.4:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.4
   variables:
     DRUPAL_CORE: 9.0.x
   script:
-    - php ~/drupal/core/scripts/run-tests.sh --verbose --color --url "$DRUPAL_SERVER_HOST:$DRUPAL_SERVER_PORT" $DRUPAL_MODULE_NAME
+    - drupal-tr run-tests
 

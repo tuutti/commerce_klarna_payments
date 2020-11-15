@@ -106,7 +106,7 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Klarna\Model\Order
+   * @return \Klarna\OrderManagement\Model\Order
    *   The klarna order response.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -184,6 +184,7 @@ final class ApiManager {
    *
    * @return bool
    *   TRUE if orders are in sync.
+   *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
    */
