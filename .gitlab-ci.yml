@@ -12,7 +12,7 @@ before_script:
 - export PATH=$HOME/.composer/vendor/bin:$PATH
 - composer global require tuutti/drupal-test-runner ^1.0
 - drupal-tr
-- drush runserver $SIMPLETEST_BASE_URL 2>&1 &
+- drupal-tr run-drush-server &
 
 services:
 - mariadb:latest
