@@ -1,12 +1,3 @@
-before_script:
-- export PATH=$HOME/.composer/vendor/bin:$PATH
-- composer global require tuutti/drupal-test-runner ^1.0
-- drupal-tr
-- drush runserver $SIMPLETEST_BASE_URL 2>&1 &
-
-services:
-- mariadb:latest
-
 variables:
   DRUPAL_MODULE_NAME: commerce_klarna_payments
   SIMPLETEST_BASE_URL: http://127.0.0.1:8080
@@ -16,6 +7,15 @@ variables:
   MYSQL_ROOT_PASSWORD: drupal
   SIMPLETEST_DB: mysql://root:drupal@mariadb/drupal
   TEST_RUNNER: core
+
+before_script:
+- export PATH=$HOME/.composer/vendor/bin:$PATH
+- composer global require tuutti/drupal-test-runner ^1.0
+- drupal-tr
+- drush runserver $SIMPLETEST_BASE_URL 2>&1 &
+
+services:
+- mariadb:latest
 
 test:7.2:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.2
