@@ -121,7 +121,7 @@ class RedirectController implements ContainerInjectionInterface {
       throw new NeedsRedirectException($response->getRedirectUrl());
     }
     catch (\InvalidArgumentException | ApiException $e) {
-      $message = $this->t('Authorization validation failed. Please contact store administration if the problemn persists.');
+      $message = $this->t('Authorization validation failed. Please contact store administration if the problem persists.');
       // Redirect back to review step.
       $this->redirectOnFailure($commerce_order, $message, $e);
     }
