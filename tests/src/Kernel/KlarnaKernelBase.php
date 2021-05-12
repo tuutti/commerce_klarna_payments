@@ -9,7 +9,8 @@ use Drupal\commerce_order\Entity\OrderItem;
 use Drupal\commerce_order\Entity\OrderItemType;
 use Drupal\commerce_payment\Entity\PaymentGateway;
 use Drupal\commerce_price\Price;
-use Drupal\Tests\commerce\Kernel\CommerceKernelTestBase;
+use Drupal\commerce_store\StoreCreationTrait;
+use Drupal\KernelTests\Core\Entity\EntityKernelTestBase;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -17,9 +18,10 @@ use GuzzleHttp\HandlerStack;
 /**
  * Kernel test base for Klarna payments.
  */
-abstract class KlarnaKernelBase extends CommerceKernelTestBase {
+abstract class KlarnaKernelBase extends EntityKernelTestBase {
 
   use ObjectSerializerTrait;
+  use StoreCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -28,7 +30,18 @@ abstract class KlarnaKernelBase extends CommerceKernelTestBase {
     'entity_reference_revisions',
     'profile',
     'path',
+    'address',
+    'datetime',
+    'entity',
+    'options',
+    'inline_entity_form',
+    'views',
+    'path',
+    'path_alias',
     'state_machine',
+    'commerce',
+    'commerce_price',
+    'commerce_store',
     'commerce_product',
     'commerce_number_pattern',
     'commerce_order',
@@ -45,24 +58,38 @@ abstract class KlarnaKernelBase extends CommerceKernelTestBase {
   protected $gateway;
 
   /**
+   * The commerce store.
+   *
+   * @var \Drupal\commerce_store\Entity\StoreInterface
+   */
+  protected $store;
+
+  /**
    * {@inheritdoc}
    */
-  protected function setUp() {
+  protected function setUp() : void {
     parent::setUp();
 
+    $this->config('system.date')->set('country', ['default' => 'FI'])->save();
     $this->installEntitySchema('profile');
     $this->installEntitySchema('commerce_order');
     $this->installEntitySchema('commerce_order_item');
     $this->installEntitySchema('commerce_payment');
     $this->installEntitySchema('commerce_product');
     $this->installEntitySchema('commerce_product_variation');
+    $this->installEntitySchema('path_alias');
+    $this->installEntitySchema('commerce_currency');
+    $this->installEntitySchema('commerce_store');
     $this->installConfig([
+      'commerce_store',
       'commerce_product',
       'commerce_order',
       'commerce_checkout',
       'commerce_payment',
     ]);
     $this->installSchema('commerce_number_pattern', ['commerce_number_pattern_sequence']);
+    $currency_importer = $this->container->get('commerce_price.currency_importer');
+    $currency_importer->import('USD');
 
     // An order item type that doesn't need a purchasable entity.
     OrderItemType::create([

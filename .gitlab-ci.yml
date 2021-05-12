@@ -7,6 +7,7 @@ variables:
   MYSQL_ROOT_PASSWORD: drupal
   SIMPLETEST_DB: mysql://root:drupal@mariadb/drupal
   TEST_RUNNER: core
+  SYMFONY_DEPRECATIONS_HELPER: disabled
 
 before_script:
 - export PATH=$HOME/.composer/vendor/bin:$PATH
@@ -34,3 +35,9 @@ test:7.4:
   script:
     - drupal-tr run-tests
 
+test:8.0:
+  image: registry.gitlab.com/tuutti/drupal-php-docker:8.0
+  variables:
+    DRUPAL_CORE_VERSION: 9.1.x
+  script:
+    - drupal-tr run-tests

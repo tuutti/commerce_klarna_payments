@@ -42,7 +42,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  public function setUp() {
+  public function setUp() : void {
     parent::setUp();
 
     $this->paymentStorage = $this->container

@@ -13,7 +13,6 @@ use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
 use GuzzleHttp\Client;
-use InvalidArgumentException;
 use Klarna\OrderManagement\Api\CapturesApi;
 use Klarna\OrderManagement\Api\OrdersApi;
 use Klarna\Payments\Api\OrdersApi as PaymentOrdersApi;
@@ -90,7 +89,7 @@ final class ApiManager {
     $gateway = $order->get('payment_gateway');
 
     if ($gateway->isEmpty()) {
-      throw new InvalidArgumentException('Payment gateway not found.');
+      throw new \InvalidArgumentException('Payment gateway not found.');
     }
     $plugin = $gateway->first()->entity->getPlugin();
 
@@ -147,7 +146,7 @@ final class ApiManager {
       ->getData();
 
     if (!$capture instanceof Capture) {
-      throw new InvalidArgumentException('Capture is not set.');
+      throw new \InvalidArgumentException('Capture is not set.');
     }
 
     if ($amount) {
@@ -159,7 +158,7 @@ final class ApiManager {
 
     $orderResponse = $this->getOrder($order);
     // Create capture request doesn't return the capture it made.
-    // We should'nt have any recaptures before this, but re-fetch the order and
+    // We should not have any recaptures before this, but re-fetch the order and
     // compare captures to previously fetched captures just to be sure.
     $newCaptures = array_filter($orderResponse->getCaptures(), function (Capture $newCapture) use ($currentCaptures) {
       foreach ($currentCaptures as $oldCapture) {
@@ -215,7 +214,6 @@ final class ApiManager {
     }
     $this->eventDispatcher
       ->dispatch(Events::RELEASE_REMAINING_AUTHORIZATION, new RequestEvent($order, $orderResponse));
-
     $this
       ->getOrderManagementApi($order)
       ->releaseRemainingAuthorization($orderResponse->getOrderId());
@@ -414,7 +412,7 @@ final class ApiManager {
       ->getData();
 
     if (!$session instanceof Session) {
-      throw new InvalidArgumentException('Session is not set.');
+      throw new \InvalidArgumentException('Session is not set.');
     }
     $sessionId      = $order->getData('klarna_session_id');
     $sessionRequest = $this->getSessionsApi($order);
