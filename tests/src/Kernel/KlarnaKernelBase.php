@@ -26,7 +26,7 @@ abstract class KlarnaKernelBase extends EntityKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = [
+  public static $modules = [
     'entity_reference_revisions',
     'profile',
     'path',

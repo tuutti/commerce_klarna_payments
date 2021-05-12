@@ -36,7 +36,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = [
+  public static $modules = [
     'address',
     'commerce_tax',
     'commerce_shipping',
