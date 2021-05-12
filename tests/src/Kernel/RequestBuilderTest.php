@@ -36,7 +36,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  public static $modules = [
+  protected static $modules = [
     'address',
     'commerce_tax',
     'commerce_shipping',
@@ -46,7 +46,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  public function setUp() {
+  public function setUp() : void {
     parent::setUp();
 
     $this->installConfig(['commerce_promotion', 'commerce_tax', 'address']);
@@ -227,7 +227,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $order = $this->createOrder();
 
     $request = $this->sut->createSessionRequest($order);
-    $this->assertEqual(NULL, $request->getBillingAddress());
+    $this->assertEquals(NULL, $request->getBillingAddress());
 
     $order
       ->setEmail('test@example.com')
