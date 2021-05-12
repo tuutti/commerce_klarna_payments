@@ -159,8 +159,7 @@ final class ApiManager {
 
     $orderResponse = $this->getOrder($order);
     // Create capture request doesn't return the capture it made.
-    // We should'nt have any recaptures before this, but re-fetch the order and
-    // compare captures to previously fetched captures just to be sure.
+    // Fetch all captures and compare them to captures fetched before latest capture.
     $newCaptures = array_filter($orderResponse->getCaptures(), function (Capture $newCapture) use ($currentCaptures) {
       foreach ($currentCaptures as $oldCapture) {
         // We only care about newly made captures.

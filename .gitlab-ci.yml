@@ -34,3 +34,9 @@ test:7.4:
   script:
     - drupal-tr run-tests
 
+test:8.0:
+  image: registry.gitlab.com/tuutti/drupal-php-docker:8.0
+  variables:
+    DRUPAL_CORE_VERSION: 9.1.x
+  script:
+    - drupal-tr run-tests
