@@ -18,11 +18,6 @@ before_script:
 services:
 - mariadb:latest
 
-test:7.2:
-  image: registry.gitlab.com/tuutti/drupal-php-docker:7.2
-  script:
-    - drupal-tr run-tests
-
 test:7.3:
   image: registry.gitlab.com/tuutti/drupal-php-docker:7.3
   script:
