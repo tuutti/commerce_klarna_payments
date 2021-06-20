@@ -24,6 +24,8 @@ use Klarna\OrderManagement\Model\Order;
 use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Klarna\OrderManagement\Api\RefundsApi;
+use \Klarna\OrderManagement\Model\RefundObject;
 
 /**
  * Provides a service to interact with Klarna.
@@ -259,6 +261,33 @@ final class ApiManager {
   }
 
   /**
+   * Refund payment for given order.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   * @param \Drupal\commerce_price\Price $amount
+   *   The order.
+   * @param string $klarna_idempotency_key
+   *   The key to guarantee the idempotency of the operation. The key
+   *   should be unique. Retries of requests are safe to be applied in case
+   *   of errors.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
+   */
+  public function refundPayment(OrderInterface $order, Price $amount, string $klarna_idempotency_key) : void {
+    $orderResponse = $this->getOrder($order);
+    $body = new RefundObject([
+      'refunded_amount' => UnitConverter::toAmount($amount),
+    ]);
+    $this->eventDispatcher
+      ->dispatch(Events::REFUND_CREATE, new RequestEvent($order, $orderResponse));
+
+    $this->getRefundsApi($order)
+      ->refundOrder($orderResponse->getOrderId(), $klarna_idempotency_key, $body);
+  }
+
+  /**
    * Authorizes the order.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -387,6 +416,23 @@ final class ApiManager {
   public function getOrderManagementApi(OrderInterface $order) : OrdersApi {
     $plugin = $this->getPlugin($order);
     return new OrdersApi($this->client, $plugin->getClientConfiguration());
+  }
+
+  /**
+   * Gets the refund api request.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return \Klarna\OrderManagement\Api\RefundsApi
+   *   The refunds api request.
+   *
+   * @throws \Drupal\Core\TypedData\Exception\MissingDataException
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   */
+  public function getRefundsApi(OrderInterface $order) : RefundsApi {
+    $plugin = $this->getPlugin($order);
+    return new RefundsApi($this->client, $plugin->getClientConfiguration());
   }
 
   /**

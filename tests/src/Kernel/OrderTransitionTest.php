@@ -103,7 +103,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
 
     $order = $this->reloadEntity($order);
     $this->assertTrue($order->getTotalPaid()->equals($order->getTotalPrice()));
-    $this->assertEqual($order->getState()->getId(), 'completed');
+    $this->assertEquals('completed', $order->getState()->getId());
   }
 
   /**
@@ -153,7 +153,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $this->assertOrder($responses, function (OrderInterface $order) {
       $payments = $this->paymentStorage->loadMultipleByOrder($order);
       $this->assertCount(1, $payments);
-      $this->assertEqual('4ba29b50-be7b-44f5-a492-113e6a865e22', reset($payments)->getRemoteId());
+      $this->assertEquals('4ba29b50-be7b-44f5-a492-113e6a865e22', reset($payments)->getRemoteId());
     });
   }
 
@@ -313,7 +313,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
 
     $payments = $this->paymentStorage->loadMultipleByOrder($order);
     $this->assertCount(1, $payments);
-    $this->assertEqual('authorization', reset($payments)->getState()->getId());
+    $this->assertEquals('authorization', reset($payments)->getState()->getId());
 
     foreach (['validate', 'fulfill'] as $state) {
       $order->getState()->applyTransitionById($state);

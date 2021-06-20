@@ -12,6 +12,7 @@ use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\PaymentGatewayInterface as PaymentGatewayPluginInterface;
+use Drupal\commerce_price\Price;
 use Drupal\Core\Field\FieldItemInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use GuzzleHttp\Client;
@@ -26,6 +27,7 @@ use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
 use Prophecy\Argument;
 use Prophecy\Prophecy\ObjectProphecy;
+use Prophecy\Prophecy\ProphecyInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -99,6 +101,23 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $list->first()->willReturn((object) ['entity' => $gateway->reveal()]);
 
     $order->get('payment_gateway')->willReturn($list->reveal());
+  }
+
+  /**
+   * Creates an order stub.
+   *
+   * @param mixed $returnValue
+   *   The expected return value.
+   *
+   * @return \Prophecy\Prophecy\ProphecyInterface
+   *   The prophecy object.
+   */
+  private function createOrderStub($returnValue) : ProphecyInterface {
+    $order = $this->prophesize(OrderInterface::class);
+    $order->getData('klarna_order_id')
+      ->shouldBeCalled()
+      ->willReturn($returnValue);
+    return $order;
   }
 
   /**
@@ -314,11 +333,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    */
   public function testGetOrderNoOrder() : void {
     $this->expectException(NonKlarnaOrderException::class);
-
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn(NULL);
+    $order = $this->createOrderStub(NULL);
 
     $this->populateOrderPluginStub($order);
 
@@ -332,11 +347,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    * @covers ::getOrder
    */
   public function testGetOrder() : void {
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
-
+    $order = $this->createOrderStub('123');
     $this->populateOrderPluginStub($order);
 
     $client = $this->createHttpClient([
@@ -354,10 +365,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    * @covers ::acknowledgeOrder
    */
   public function testAcknowledgeOrder() : void {
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
+    $order = $this->createOrderStub('123');
 
     $this->populateOrderPluginStub($order);
 
@@ -381,10 +389,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    */
   public function testCreateCaptureException() : void {
     $this->expectException(\InvalidArgumentException::class);
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
+    $order = $this->createOrderStub('123');
 
     $this->populateOrderPluginStub($order);
 
@@ -410,10 +415,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
    * @covers ::createCapture
    */
   public function testCreateCapture() : void {
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
+    $order = $this->createOrderStub('123');
 
     $this->populateOrderPluginStub($order);
 
@@ -438,15 +440,31 @@ class ApiManagerTest extends FixtureUnitTestBase {
   }
 
   /**
+   * Tests refundPayment().
+   *
+   * @covers ::refundPayment
+   */
+  public function testCreateRefund() : void {
+    $order = $this->createOrderStub('123');
+
+    $this->populateOrderPluginStub($order);
+
+    $client = $this->createHttpClient([
+      new Response(200, [], $this->getFixture('get-order.json')),
+      new Response(200),
+    ]);
+    $sut = $this->createSut($order->reveal(), NULL, $client);
+
+    $sut->refundPayment($order->reveal(), new Price('100', 'EUR'), '123');
+  }
+
+  /**
    * Tests voidPayment().
    *
    * @covers ::voidPayment
    */
-  public function testReleaseRemainingAuthorization() : void {
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
+  public function testVoidPayment() : void {
+    $order = $this->createOrderStub('123');
 
     $this->populateOrderPluginStub($order);
 
@@ -459,6 +477,29 @@ class ApiManagerTest extends FixtureUnitTestBase {
   }
 
   /**
+   * Tests releaseRemainingAuthorization().
+   *
+   * @covers ::releaseRemainingAuthorization
+   */
+  public function testReleaseRemainingAuthorization() : void {
+    $order = $this->createOrderStub('123');
+
+    $this->populateOrderPluginStub($order);
+
+    $client = $this->createHttpClient([
+      new Response(200, [], $this->getFixture('get-order.json')),
+      new Response(200),
+      new Response(200, [], $this->getFixture('get-order.json')),
+      new Response(200),
+    ]);
+    $sut = $this->createSut($order->reveal(), NULL, $client);
+    $sut->releaseRemainingAuthorization($order->reveal());
+
+    $orderResponse = $sut->getOrder($order->reveal());
+    $sut->releaseRemainingAuthorization($order->reveal(), $orderResponse);
+  }
+
+  /**
    * Tests handleNotifactionEvent().
    *
    * @covers ::handleNotificationEvent
@@ -468,10 +509,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
     if ($invalid) {
       $this->expectException(\InvalidArgumentException::class);
     }
-    $order = $this->prophesize(OrderInterface::class);
-    $order->getData('klarna_order_id')
-      ->shouldBeCalled()
-      ->willReturn('123');
+    $order = $this->createOrderStub('123');
 
     $this->populateOrderPluginStub($order);
 
