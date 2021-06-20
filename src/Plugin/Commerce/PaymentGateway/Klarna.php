@@ -13,6 +13,7 @@ use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayBase;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorizationsInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotificationsInterface;
+use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 use Drupal\commerce_price\Price;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
@@ -36,7 +37,7 @@ use Symfony\Component\HttpFoundation\Response;
  *   requires_billing_information = FALSE
  * )
  */
-final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface, KlarnaInterface {
+final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthorizationsInterface, SupportsNotificationsInterface, SupportsRefundsInterface, KlarnaInterface {
 
   use OptionsHelper;
 
@@ -60,8 +61,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
     /** @var self $instance */
     $instance = parent::create($container, $configuration, $plugin_definition, $plugin_definition);
-    $instance->setApiManager($container->get('commerce_klarna_payments.api_manager'))
-      ->setLogger($container->get('logger.channel.commerce_klarna_payments'));
+    $instance->apiManager = $container->get('commerce_klarna_payments.api_manager');
+    $instance->logger = $container->get('logger.channel.commerce_klarna_payments');
 
     return $instance;
   }
@@ -401,6 +402,44 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
 
     $payment->setState('authorization_voided')
       ->save();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    // Validate the requested amount.
+    $this->assertRefundAmount($payment, $amount);
+    $order = $payment->getOrder();
+
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+
+    try {
+      // Idempotency key has to be unique for every refund event.
+      // Use payment's UUID as a base and append refunded amount
+      // to make sure it's always unique.
+      $klarna_idempotency_key = $payment->uuid();
+      $klarna_idempotency_key .= '-' . $new_refunded_amount->getNumber();
+
+      $this->apiManager->refundPayment($order, $amount, $klarna_idempotency_key);
+    }
+    catch (\Exception $e) {
+      throw new PaymentGatewayException($e->getMessage(), $e->getCode(), $e);
+    }
+
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->setState('partially_refunded');
+    }
+    else {
+      $payment->setState('refunded');
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
   }
 
 }
