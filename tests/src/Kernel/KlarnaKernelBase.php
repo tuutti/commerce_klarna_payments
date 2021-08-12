@@ -159,7 +159,7 @@ abstract class KlarnaKernelBase extends EntityKernelTestBase {
     }
     $order->save();
 
-    return $order;
+    return $this->reloadEntity($order);
   }
 
   /**

@@ -65,6 +65,36 @@ class RequestBuilderTest extends UnitTestCase {
   }
 
   /**
+   * Tests that purchase country can be set.
+   */
+  public function testPurchaseCountry() : void {
+    $order = $this->createOrderMock();
+    $store = $this->prophesize(StoreInterface::class);
+    $address = $this->prophesize(AddressInterface::class);
+    $address->getCountryCode()->willReturn('fi');
+    $store->getAddress()->willReturn($address->reveal());
+    $order->getStore()->willReturn($store->reveal());
+
+    $language = $this->prophesize(LanguageInterface::class);
+    $language->getId()->willReturn('fi');
+    $languageManager = $this->prophesize(LanguageManagerInterface::class);
+    $languageManager->getCurrentLanguage()->willReturn($language->reveal());
+
+    $sut = new RequestBuilder($languageManager->reveal());
+    $request = $sut->createSessionRequest($order->reveal());
+
+    // Make sure purchase country defaults to store's country.
+    $this->assertEquals('fi', $request->getPurchaseCountry());
+
+    $address->getCountryCode()->willReturn('se');
+    $order->get('billing_profile')->willReturn((object) ['entity' => $address->reveal()]);
+    $request = $sut->createSessionRequest($order->reveal());
+
+    // Make sure purchase country is overridden by billing address.
+    $this->assertEquals('se', $request->getPurchaseCountry());
+  }
+
+  /**
    * Tests that locale can be empty if purchase country is not set.
    */
   public function testEmptyLocale() : void {

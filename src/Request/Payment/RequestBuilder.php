@@ -106,8 +106,11 @@ class RequestBuilder {
 
     if ($billingAddress = $this->getAddress($order, 'billing')) {
       $session->setBillingAddress($billingAddress);
+
       // Override purchase country from billing address.
-      $session->setPurchaseCountry($billingAddress->getCountry());
+      if ($billingAddress->getCountry()) {
+        $session->setPurchaseCountry($billingAddress->getCountry());
+      }
     }
 
     if ($shippingAddress = $this->getAddress($order, 'shipping')) {
