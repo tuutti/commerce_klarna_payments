@@ -98,7 +98,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     $payment = $this->getPayment($order);
 
     foreach ($orderResponse->getCaptures() as $capture) {
-      // Skip already synced orders.
+      // Skip already synced payments.
       if ($this->paymentStorage->loadByRemoteId($capture->getCaptureId())) {
         continue;
       }
@@ -151,7 +151,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
 
     $orderResponse = $this->apiManager->getOrder($order);
 
-    // Sync all payments made via merchant panel.
+    // Sync all captures made via merchant panel.
     $this->syncPayments($order, $orderResponse, $plugin);
 
     // We shouldn't make any captures if the order differs from the one on

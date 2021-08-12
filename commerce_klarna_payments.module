@@ -49,8 +49,8 @@ function commerce_klarna_payments_form_alter(&$form, FormStateInterface $form_st
     return;
   }
 
-  if (!$service->orderIsInSync($order, $orderResponse)) {
-    Drupal::messenger()->addWarning(t('Order is out of sync with Klarna order. Use merchant panel to make any further changes to this order.'));
+  if (!$service->orderIsInSync($order, $orderResponse) && $orderResponse->getStatus() !== 'CAPTURED') {
+    Drupal::messenger()->addError(t('Order is out of sync with Klarna order. Use Klarna merchant panel to  make any further changes and capture the order before fulfilling the order here.'));
   }
 
   if ($orderResponse->getFraudStatus() === 'PENDING') {

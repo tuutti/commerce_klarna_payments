@@ -4,7 +4,6 @@ declare(strict_types = 1);
 
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
-use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Adjustment;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
@@ -13,8 +12,6 @@ use Drupal\commerce_product\Entity\ProductVariationInterface;
 use Drupal\commerce_shipping\Entity\ShipmentInterface;
 use Drupal\commerce_tax\Entity\TaxType;
 use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
-use Drupal\Core\Language\LanguageInterface;
-use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\profile\Entity\Profile;
 use Prophecy\Prophecy\ObjectProphecy;
 
@@ -79,7 +76,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $expected = [
       'purchase_country' => 'FI',
       'purchase_currency' => 'EUR',
-      'locale' => 'en-US',
+      'locale' => 'en-FI',
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
@@ -111,7 +108,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $expected = [
       'purchase_country' => 'FI',
       'purchase_currency' => 'EUR',
-      'locale' => 'en-US',
+      'locale' => 'en-FI',
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
@@ -145,7 +142,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $expected = [
       'purchase_country' => 'FI',
       'purchase_currency' => 'EUR',
-      'locale' => 'en-US',
+      'locale' => 'en-FI',
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
@@ -374,31 +371,6 @@ class RequestBuilderTest extends KlarnaKernelBase {
   }
 
   /**
-   * Tests the locale.
-   */
-  public function testLocale() : void {
-    $order = $this->createOrder();
-
-    $tests = [
-      'fi' => 'fi-FI',
-      'at' => 'de-AT',
-      'nonexistent' => 'en-US',
-    ];
-
-    foreach ($tests as $langcode => $expected) {
-      $language = $this->prophesize(LanguageInterface::class);
-      $language->getId()->willReturn($langcode);
-      $languageManager = $this->prophesize(LanguageManagerInterface::class);
-      $languageManager->getCurrentLanguage()->willReturn($language->reveal());
-
-      $sut = new RequestBuilder($languageManager->reveal());
-      $request = $sut->createSessionRequest($order);
-
-      $this->assertEquals($expected, $request->getLocale());
-    }
-  }
-
-  /**
    * Make sure order level promotions are calculated correctly.
    */
   public function testOrderPromotion() : void {
@@ -411,8 +383,8 @@ class RequestBuilderTest extends KlarnaKernelBase {
         'percentage' => '10',
       ]
     ));
+    $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
     $order->save();
-    $this->reloadEntity($order);
 
     $request = $this->sut->createSessionRequest($order);
     $this->assertEquals(990, $request->getOrderAmount());

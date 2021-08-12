@@ -86,21 +86,24 @@ class OrderTransitionTest extends KlarnaKernelBase {
    */
   private function assertOrder(array $responses, callable $callback) : void {
     $order = $this->createOrder([], ['klarna_order_id' => '123'], new Price('10', 'USD'));
-    // We should refresh order every time we load it.
-    $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
-
     $this->populateHttpClient($order, $responses);
 
     // Account for payment made in Klarna::onReturn() callback.
     $this->plugin->createPayment($order);
 
-    foreach (['validate', 'fulfill'] as $state) {
+    foreach (['place', 'validate', 'fulfill'] as $state) {
+      $order = \Drupal\commerce_order\Entity\Order::load($order->id());
       $order->getState()->applyTransitionById($state);
       $order->save();
     }
 
     $callback($order);
 
+    // Commerce payment's order update destruct event is never run after
+    // the payment is completed, making order never paid in full.
+    // Make sure order refresh service collector is run.
+    $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
+    $order->save();
     $order = $this->reloadEntity($order);
     $this->assertTrue($order->getTotalPaid()->equals($order->getTotalPrice()));
     $this->assertEquals('completed', $order->getState()->getId());
@@ -130,6 +133,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
   public function testInvalidState() : void {
     $order = $this->createOrder();
 
+    $order->getState()->applyTransitionById('place');
     $order->getState()->applyTransitionById('validate');
     $order->save();
     $this->assertTrue($order->getTotalPaid()->isZero());
@@ -138,8 +142,10 @@ class OrderTransitionTest extends KlarnaKernelBase {
   /**
    * Tests that order gets marked as paid.
    */
-  public function testOnOrderPlace() : void {
+  public function testOnOrderPlacePaid() : void {
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       // getOrder inside OrderTransitionSubscriber::onOrderPlace.
       new Response(200, [], $this->getFixture('get-order-no-captures.json')),
       // getOrder inside ApiManager::createCapture.
@@ -162,6 +168,8 @@ class OrderTransitionTest extends KlarnaKernelBase {
    */
   public function testOnOrderPlaceSyncRemote() : void {
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       // getOrder inside OrderTransitionSubscriber::onOrderPlace.
       new Response(200, [], $this->getFixture('get-order-two-captures.json')),
       // getOrder inside ApiManager::createCapture.
@@ -194,11 +202,13 @@ class OrderTransitionTest extends KlarnaKernelBase {
         'captured_amount' => 1000,
       ]),
     ];
-    /** @var \Klarna\Model\Order $orderResponse */
+    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
     $orderResponse->setCaptures($captures);
 
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       // getOrder inside OrderTransitionSubscriber::onOrderPlace.
       new Response(200, [], $this->modelToJson($orderResponse)),
     ];
@@ -224,7 +234,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
         'captured_amount' => 500,
       ]),
     ];
-    /** @var \Klarna\Model\Order $orderResponse */
+    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
     $orderResponse->setCaptures($captures);
 
@@ -237,6 +247,8 @@ class OrderTransitionTest extends KlarnaKernelBase {
     ] + $captures);
 
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       // getOrder inside OrderTransitionSubscriber::onOrderPlace.
       new Response(200, [], $this->modelToJson($orderResponse)),
       // getOrder inside ApiManager::createCapture.
@@ -266,7 +278,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
    * in merchant panel (like different unit price for an item).
    */
   public function testOnOrderPlaceOrderNotInSyncCaptured() : void {
-    /** @var \Klarna\Model\Order $orderResponse */
+    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
     // Override order total to make order 'out of sync'.
     $orderResponse->setOrderAmount(UnitConverter::toAmount(new Price('15', 'USD')));
@@ -274,6 +286,8 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $orderResponse->setStatus('CAPTURED');
 
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       new Response(200, [], $this->modelToJson($orderResponse)),
     ];
 
@@ -290,19 +304,20 @@ class OrderTransitionTest extends KlarnaKernelBase {
    */
   public function testOnOrderPlaceOrderNotInSync() : void {
     $order = $this->createOrder([], ['klarna_order_id' => '123'], new Price('10', 'USD'));
-    $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
 
     // Trying to fulfill out of sync order that is not yet fully captured should
     // result in PaymentGatewayException, but EntityStorage seems to catch the
     // exception and throw EntityStorageException instead.
     $this->expectExceptionMessage(sprintf('Order (%s) is out of sync, but not fully captured yet.', $order->id()));
 
-    /** @var \Klarna\Model\Order $orderResponse */
+    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
     // Override order total to make order 'out of sync'.
     $orderResponse->setOrderAmount(UnitConverter::toAmount(new Price('15', 'USD')));
 
     $responses = [
+      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
+      new Response(404),
       new Response(200, [], $this->modelToJson($orderResponse)),
     ];
 
@@ -315,7 +330,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $this->assertCount(1, $payments);
     $this->assertEquals('authorization', reset($payments)->getState()->getId());
 
-    foreach (['validate', 'fulfill'] as $state) {
+    foreach (['place', 'validate', 'fulfill'] as $state) {
       $order->getState()->applyTransitionById($state);
       $order->save();
     }
