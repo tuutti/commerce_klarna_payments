@@ -114,7 +114,7 @@ class RequestBuilderTest extends UnitTestCase {
    *
    * @covers ::createSessionRequest
    * @covers ::getLocale
-   * @dataProvider testLocaleData
+   * @dataProvider localeTestData
    */
   public function testLocale(string $expected, string $interface, string $country) : void {
     $order = $this->createOrderMock();
@@ -141,7 +141,7 @@ class RequestBuilderTest extends UnitTestCase {
    * @return \string[][]
    *   The test data.
    */
-  public function testLocaleData() : array {
+  public function localeTestData() : array {
     return [
       // AT.
       ['de-AT', 'de', 'at'],

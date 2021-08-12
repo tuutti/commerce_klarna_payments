@@ -383,8 +383,8 @@ class RequestBuilderTest extends KlarnaKernelBase {
         'percentage' => '10',
       ]
     ));
+    $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
     $order->save();
-    $this->reloadEntity($order);
 
     $request = $this->sut->createSessionRequest($order);
     $this->assertEquals(990, $request->getOrderAmount());
