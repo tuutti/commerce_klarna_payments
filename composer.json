@@ -11,7 +11,7 @@
         "source": "http://cgit.drupalcode.org/commerce_klarna_payments"
     },
     "require": {
-        "php": ">=7.1",
+        "php": ">=7.3",
         "tuutti/php-klarna-payments": "~1.0.0",
         "tuutti/php-klarna-ordermanagement": "~1.0.0",
         "webmozart/assert": "*",

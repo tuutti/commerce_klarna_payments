@@ -85,12 +85,12 @@ class RequestBuilder {
 
     $session = new Session();
 
+    // Default purchase country to store country.
     if ($storeAddress = $order->getStore()->getAddress()) {
       $session->setPurchaseCountry($storeAddress->getCountryCode());
     }
 
     $session
-      ->setLocale($this->getLocale())
       ->setPurchaseCurrency($order->getTotalPrice()->getCurrencyCode())
       ->setOrderAmount(UnitConverter::toAmount($order->getTotalPrice()))
       ->setMerchantUrls(new MerchantUrls([
@@ -106,10 +106,16 @@ class RequestBuilder {
 
     if ($billingAddress = $this->getAddress($order, 'billing')) {
       $session->setBillingAddress($billingAddress);
+      // Override purchase country from billing address.
+      $session->setPurchaseCountry($billingAddress->getCountry());
     }
 
     if ($shippingAddress = $this->getAddress($order, 'shipping')) {
       $session->setShippingAddress($shippingAddress);
+    }
+
+    if ($purchaseCountry = $session->getPurchaseCountry()) {
+      $session->setLocale($this->getLocale($purchaseCountry));
     }
 
     $totalTax   = 0;
@@ -210,23 +216,51 @@ class RequestBuilder {
   /**
    * Attempts to map ISO locale to RFC 1766 locale.
    *
+   * @param string $country
+   *   The country.
+   *
+   * @see https://docs.klarna.com/klarna-payments/in-depth-knowledge/puchase-countries-currencies-locales/
+   *
    * @return string
    *   The RFC 1766 locale.
    */
-  protected function getLocale() : string {
-    $locale = strtolower($this->languageManager->getCurrentLanguage()->getId());
+  protected function getLocale(string $country) : string {
+    $language = strtolower($this->languageManager->getCurrentLanguage()->getId());
+    $country = strtolower($country);
 
     $map = [
-      'fi' => 'fi-FI',
-      'sv' => 'sv-SV',
-      'nb' => 'nb-NO',
-      'nn' => 'nn-NO',
-      'de' => 'de-DE',
-      // Drupal does not define these by default.
-      'at' => 'de-AT',
+      'at' => ['de' => 'de-AT', 'en' => 'en-AT'],
+      'dk' => ['da' => 'da-DK', 'en' => 'en-DK'],
+      'de' => ['de' => 'de-DE', 'en' => 'en-DE'],
+      'fi' => ['fi' => 'fi-FI', 'en' => 'en-FI', 'sv' => 'sv-FI'],
+      'nl' => ['nl' => 'nl-NL', 'en' => 'en-NL'],
+      'no' => ['nb' => 'nb-NO', 'nn' => 'nb-NO', 'en' => 'en-NO'],
+      'se' => ['sv' => 'sv-SE', 'en' => 'en-SE'],
+      'ch' => [
+        'de' => 'de-CH',
+        'fr' => 'fr-CH',
+        'it' => 'it-CH',
+        'en' => 'en-CH',
+      ],
+      'gb' => ['en' => 'en-GB'],
+      'us' => ['en' => 'en-US'],
+      'au' => ['en' => 'en-AU'],
+      'be' => ['nl' => 'nl-BE', 'fr' => 'fr-BE'],
+      'es' => ['es' => 'es-ES'],
+      'it' => ['it' => 'it-IT'],
     ];
 
-    return $map[$locale] ?? 'en-US';
+    if (isset($map[$country])) {
+      // Attempt to serve different language based on interface language. Like
+      // fi-EN when interface language is set to english.
+      if (isset($map[$country][$language])) {
+        return $map[$country][$language];
+      }
+      // Default to first available language.
+      return reset($map[$country]);
+    }
+
+    return 'en-US';
   }
 
   /**
