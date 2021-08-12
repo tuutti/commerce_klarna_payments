@@ -42,7 +42,7 @@
 
 
       handleAuthorizationResponse(response) {
-        // Reset aurhotization attempted in case user closes the
+        // Reset authorization attempted in case user closes the
         // popup.
         if (response.show_form && !response.approved) {
           this.update({ authorizationAttempted: false })
