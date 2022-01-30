@@ -33,7 +33,7 @@ jobs:
 
       - name: Set variables
         run: |
-          echo "$HOME/.config/composer/vendor/bin" >> $GITHUB_PATH
+          echo "/.composer/vendor/bin" >> $GITHUB_PATH
 
       - name: Setup Drupal test runner
         run: |
