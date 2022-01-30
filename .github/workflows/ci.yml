@@ -41,10 +41,11 @@ jobs:
       - name: Install required composer dependencies
         run: |
           cd $DRUPAL_ROOT
+          composer config platform.php ${{ matrix.php-version }}
           composer config repositories.0 path $GITHUB_WORKSPACE
           composer require drupal/$DRUPAL_MODULE_NAME
           composer run-script drupal-phpunit-upgrade
-          composer require "drush/drush ^11.0" --ignore-platform-reqs
+          composer require "drush/drush ^11.0"
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer require --dev "drupal/coder"
 
