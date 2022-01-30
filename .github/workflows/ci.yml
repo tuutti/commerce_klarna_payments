@@ -32,17 +32,36 @@ jobs:
           fetch-depth: 1
 
       - name: Set variables
-        run: |
-          echo "/.composer/vendor/bin" >> $GITHUB_PATH
+        run: echo "DRUPAL_ROOT=$HOME/drupal" >> $GITHUB_ENV
 
-      - name: Setup Drupal test runner
-        run: |
-          composer global require tuutti/drupal-test-runner ~1.0
+      # Clone Drupal core into $DRUPAL_ROOT folder.
+      - name: Clone drupal
+        run: git clone --depth 1 --branch "$DRUPAL_CORE_VERSION" http://git.drupal.org/project/drupal.git/ $DRUPAL_ROOT
 
-      - name: Setup Drupal
+      - name: Install required composer dependencies
         run: |
-          drupal-tr
-          composer require drush/drush:^11.0
+          cd $DRUPAL_ROOT
+          composer config repositories.0 path $GITHUB_WORKSPACE
+          composer require drupal/$DRUPAL_MODULE_NAME
+          composer run-script drupal-phpunit-upgrade
+          composer require "drush/drush ^11.0"
+          composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer require --dev "drupal/coder"
 
-      - name: Run tests
-        run: TEST_RUNNER=core drupal-tr run-tests
+      - name: Install Drupal
+        run: |
+          cd $DRUPAL_ROOT
+          php -d sendmail_path=$(which true); vendor/bin/drush --yes -v site-install minimal --db-url="$SIMPLETEST_DB"
+          vendor/bin/drush en $DRUPAL_MODULE_NAME -y
+
+      - name: Run PHPCS
+        run: |
+          cd $DRUPAL_ROOT
+          vendor/bin/phpcs modules/contrib/$DRUPAL_MODULE_NAME --standard=Drupal
+
+      - name: Run PHPUnit tests
+        run: |
+          cd $DRUPAL_ROOT
+          vendor/bin/drush runserver $SIMPLETEST_BASE_URL > /dev/null 2>&1 &
+          chromedriver --port=4444 > /dev/null 2>&1 &
+          php ./core/scripts/run-tests.sh --dburl $SIMPLETEST_DB --php /usr/local/bin/php --color --verbose --sqlite /tmp/test.sqlite --url $SIMPLETEST_BASE_URL $DRUPAL_MODULE_NAME
