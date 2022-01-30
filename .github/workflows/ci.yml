@@ -6,6 +6,7 @@ env:
   SIMPLETEST_BASE_URL: "http://127.0.0.1:8080"
   DRUPAL_MODULE_NAME: "commerce_klarna_payments"
   DRUPAL_CORE_VERSION: 9.3.x
+  SYMFONY_DEPRECATIONS_HELPER: disabled
 jobs:
   test-contrib:
     runs-on: ubuntu-latest
