@@ -7,6 +7,7 @@ namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
+use Drupal\commerce_order\Entity\Order as OrderEntity;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderType;
 use Drupal\commerce_payment\Entity\PaymentInterface;
@@ -92,7 +93,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $this->plugin->createPayment($order);
 
     foreach (['place', 'validate', 'fulfill'] as $state) {
-      $order = \Drupal\commerce_order\Entity\Order::load($order->id());
+      $order = OrderEntity::load($order->id());
       $order->getState()->applyTransitionById($state);
       $order->save();
     }
@@ -195,7 +196,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
   /**
    * Tests we can complete orders that are fully captured via merchant panel.
    */
-  public function testOnOrderplaceFullyCaptured() : void {
+  public function testOnOrderPlaceFullyCaptured() : void {
     $captures = [
       new Capture([
         'capture_id' => '4ba29b50-be7b-44f5-a492-113e6a865e22',

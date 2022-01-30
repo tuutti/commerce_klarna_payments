@@ -33,7 +33,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
   /**
    * {@inheritdoc}
    */
-  public static $modules = [
+  protected static $modules = [
     'address',
     'commerce_tax',
     'commerce_shipping',
@@ -100,7 +100,10 @@ class RequestBuilderTest extends KlarnaKernelBase {
    */
   public function testCreateSessionRequestTaxIncludedInPrices() : void {
     $this->createTaxType();
-    $this->store->set('prices_include_tax', TRUE)->save();
+    // Tax registrations field is not populated by default.
+    $this->store->set('tax_registrations', ['FI'])
+      ->set('prices_include_tax', TRUE)->save();
+
     $order = $this->reloadEntity($this->createOrder());
 
     $request = $this->sut->createSessionRequest($order);
@@ -134,7 +137,9 @@ class RequestBuilderTest extends KlarnaKernelBase {
    */
   public function testCreateSessionRequestTaxNotIncludedInPrices() : void {
     $this->createTaxType();
-    $this->store->set('prices_include_tax', FALSE)->save();
+    // Tax registrations field is not populated by default.
+    $this->store->set('tax_registrations', ['FI'])
+      ->set('prices_include_tax', FALSE)->save();
 
     $order = $this->reloadEntity($this->createOrder());
     $request = $this->sut->createSessionRequest($order);

@@ -17,7 +17,6 @@ use Klarna\Payments\Model\Options;
 use Klarna\Payments\Model\Address;
 use Klarna\Payments\Model\OrderLine;
 use Klarna\Payments\Model\Session;
-use Webmozart\Assert\Assert;
 
 /**
  * Provides a request builder.
@@ -140,7 +139,21 @@ class RequestBuilder {
       $shipments = $order->get('shipments')->referencedEntities();
 
       foreach ($shipments as $shipment) {
-        $shippingOrderItem = $this->createShipmentOrderLine($shipment);
+        $amount = UnitConverter::toAmount($shipment->getAmount());
+
+        $shippingOrderItem = (new OrderLine())
+          // We use the same label the shipping adjustments are using,
+          // which is better than the generic shipment labels.
+          ->setName((string) new TranslatableMarkup('Shipping'))
+          ->setQuantity(1)
+          ->setUnitPrice($amount)
+          ->setTotalAmount($amount)
+          ->setType('shipping_fee');
+
+        foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
+          $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($taxAdjustment->getPercentage()))
+            ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
+        }
 
         if ($shippingOrderItem->getTotalTaxAmount() !== NULL) {
           $totalTax += $shippingOrderItem->getTotalTaxAmount();
@@ -153,37 +166,6 @@ class RequestBuilder {
       ->setOrderLines($orderLines);
 
     return $session;
-  }
-
-  /**
-   * Creates the shipment order line.
-   *
-   * @param \Drupal\commerce_shipping\Entity\ShipmentInterface $shipment
-   *   The shipment.
-   *
-   * @return \Klarna\Payments\Model\OrderLine
-   *   The order line.
-   */
-  protected function createShipmentOrderLine($shipment) : OrderLine {
-    Assert::isInstanceOf($shipment, '\Drupal\commerce_shipping\Entity\ShipmentInterface');
-
-    $amount = UnitConverter::toAmount($shipment->getAmount());
-
-    $shippingOrderItem = (new OrderLine())
-      // We use the same label the shipping adjustments are using,
-      // which is better than the generic shipment labels.
-      ->setName((string) new TranslatableMarkup('Shipping'))
-      ->setQuantity(1)
-      ->setUnitPrice($amount)
-      ->setTotalAmount($amount)
-      ->setType('shipping_fee');
-
-    foreach ($shipment->getAdjustments(['tax']) as $taxAdjustment) {
-      $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($taxAdjustment->getPercentage()))
-        ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
-    }
-
-    return $shippingOrderItem;
   }
 
   /**

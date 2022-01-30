@@ -1,0 +1,69 @@
+on: [push]
+name: CI
+env:
+  MYSQL_ROOT_PASSWORD: drupal
+  SIMPLETEST_DB: "mysql://drupal:drupal@mariadb:3306/drupal"
+  SIMPLETEST_BASE_URL: "http://127.0.0.1:8080"
+  DRUPAL_MODULE_NAME: "commerce_klarna_payments"
+  DRUPAL_CORE_VERSION: 9.3.x
+  SYMFONY_DEPRECATIONS_HELPER: disabled
+jobs:
+  test-contrib:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php-version: ['8.0', '8.1']
+    container:
+      image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
+
+    services:
+      mariadb:
+        image: mariadb:10.5
+        env:
+          MYSQL_USER: drupal
+          MYSQL_PASSWORD: drupal
+          MYSQL_DATABASE: drupal
+          MYSQL_ROOT_PASSWORD: drupal
+        ports:
+          - 3306:3306
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Set variables
+        run: echo "DRUPAL_ROOT=$HOME/drupal" >> $GITHUB_ENV
+
+      # Clone Drupal core into $DRUPAL_ROOT folder.
+      - name: Clone drupal
+        run: git clone --depth 1 --branch "$DRUPAL_CORE_VERSION" http://git.drupal.org/project/drupal.git/ $DRUPAL_ROOT
+
+      - name: Install required composer dependencies
+        run: |
+          cd $DRUPAL_ROOT
+          composer config platform.php ${{ matrix.php-version }}
+          composer config repositories.0 path $GITHUB_WORKSPACE
+          composer require drupal/$DRUPAL_MODULE_NAME
+          composer run-script drupal-phpunit-upgrade
+          composer require "drush/drush ^11.0"
+          composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer require --dev "drupal/coder"
+
+      - name: Install Drupal
+        run: |
+          cd $DRUPAL_ROOT
+          php -d sendmail_path=$(which true); vendor/bin/drush --yes -v site-install minimal --db-url="$SIMPLETEST_DB"
+          vendor/bin/drush en $DRUPAL_MODULE_NAME -y
+
+      - name: Run PHPCS
+        run: |
+          cd $DRUPAL_ROOT
+          vendor/bin/phpcs modules/contrib/$DRUPAL_MODULE_NAME --standard=Drupal --extensions=php,module,inc,install,test,info
+
+      - name: Run PHPUnit tests
+        run: |
+          cd $DRUPAL_ROOT
+          vendor/bin/drush runserver $SIMPLETEST_BASE_URL > /dev/null 2>&1 &
+          chromedriver --port=4444 > /dev/null 2>&1 &
+          php ./core/scripts/run-tests.sh --dburl $SIMPLETEST_DB --php /usr/local/bin/php --color --verbose --sqlite /tmp/test.sqlite --url $SIMPLETEST_BASE_URL $DRUPAL_MODULE_NAME
