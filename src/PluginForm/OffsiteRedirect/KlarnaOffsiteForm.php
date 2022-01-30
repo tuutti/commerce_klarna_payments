@@ -14,7 +14,6 @@ use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Exception;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -135,7 +134,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
         $form_state->setErrorByName('klarna_authorization_token');
       }
     }
-    catch (Exception $e) {
+    catch (\Exception $e) {
       $this->messenger->addError(
         $this->t('An unknown error occurred. Please contact store administration if the problem persists.')
       );

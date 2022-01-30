@@ -25,7 +25,7 @@ use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Klarna\OrderManagement\Api\RefundsApi;
-use \Klarna\OrderManagement\Model\RefundObject;
+use Klarna\OrderManagement\Model\RefundObject;
 
 /**
  * Provides a service to interact with Klarna.

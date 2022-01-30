@@ -58,7 +58,7 @@ jobs:
       - name: Run PHPCS
         run: |
           cd $DRUPAL_ROOT
-          vendor/bin/phpcs modules/contrib/$DRUPAL_MODULE_NAME --standard=Drupal
+          vendor/bin/phpcs modules/contrib/$DRUPAL_MODULE_NAME --standard=Drupal--extensions=php,module,inc,install,test,info
 
       - name: Run PHPUnit tests
         run: |

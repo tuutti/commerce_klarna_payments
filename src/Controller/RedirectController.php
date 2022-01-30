@@ -106,7 +106,10 @@ class RedirectController implements ContainerInjectionInterface {
    */
   public function handleRedirect(OrderInterface $commerce_order, PaymentGatewayInterface $commerce_payment_gateway, Request $request) {
     $query = $request->request->all();
-    $values = NestedArray::getValue($query, ['payment_process', 'offsite_payment']);
+    $values = NestedArray::getValue($query, [
+      'payment_process',
+      'offsite_payment',
+    ]);
 
     if (empty($values['klarna_authorization_token'])) {
       $message = $this->t('Authorization token not set. This should only happen when Klarna order is incomplete.');
