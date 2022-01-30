@@ -8,7 +8,6 @@ module.exports = {
     publicPath: '/dist/',
     filename: 'klarna.js'
   },
-  devtool: 'inline',
   module: {
     rules: [
       {
