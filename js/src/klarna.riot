@@ -42,7 +42,7 @@
 
 
       handleAuthorizationResponse(response) {
-        // Reset authorization attempted in case user closes the
+        // Reset authorization attempted state if user closes the
         // popup.
         if (response.show_form && !response.approved) {
           this.update({ authorizationAttempted: false })
@@ -52,7 +52,7 @@
           this.state.tokenElement
             .setAttribute('value', response.authorization_token)
 
-          // Submit form to redirect to complete page.
+          // Submit form to redirect to order completion page.
           document.querySelector('.payment-redirect-form').submit();
         }
       },

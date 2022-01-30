@@ -195,7 +195,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
   /**
    * Tests we can complete orders that are fully captured via merchant panel.
    */
-  public function testOnOrderplaceFullyCaptured() : void {
+  public function testOnOrderPlaceFullyCaptured() : void {
     $captures = [
       new Capture([
         'capture_id' => '4ba29b50-be7b-44f5-a492-113e6a865e22',

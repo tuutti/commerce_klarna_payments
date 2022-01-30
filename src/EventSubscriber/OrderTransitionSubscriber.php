@@ -177,14 +177,14 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       return;
     }
 
-    // Substract completed payments from total remaining balance.
+    // Subtract completed payments from total remaining balance.
     foreach ($this->paymentStorage->loadMultipleByOrder($order) as $payment) {
       if ($payment->isCompleted()) {
         $remainingBalance = $remainingBalance->subtract($payment->getAmount());
       }
     }
 
-    // Create capture with remaining balanace.
+    // Create capture with remaining balance.
     if (!$remainingBalance->isZero() && $remainingBalance->isPositive()) {
       // Attempt to use local payment made in Klarna::onReturn().
       $payment = $this->getPayment($order) ?? $plugin->createPayment($order);

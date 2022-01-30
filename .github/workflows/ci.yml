@@ -1,0 +1,47 @@
+on: [push]
+name: CI
+env:
+  MYSQL_ROOT_PASSWORD: drupal
+  SIMPLETEST_DB: "mysql://drupal:drupal@mariadb:3306/drupal"
+  SIMPLETEST_BASE_URL: "http://127.0.0.1:8080"
+  DRUPAL_MODULE_NAME: "commerce_klarna_payments"
+  DRUPAL_CORE_VERSION: 9.3.x
+jobs:
+  test-contrib:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php-version: ['7.4', '8.0', '8.1']
+    container:
+      image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
+
+    services:
+      mariadb:
+        image: mariadb:10.5
+        env:
+          MYSQL_USER: drupal
+          MYSQL_PASSWORD: drupal
+          MYSQL_DATABASE: drupal
+          MYSQL_ROOT_PASSWORD: drupal
+        ports:
+          - 3306:3306
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Set variables
+        run: |
+          echo "$HOME/.config/composer/vendor/bin" >> $GITHUB_PATH
+
+      - name: Setup Drupal test runner
+        run: |
+          composer global require tuutti/drupal-test-runner ~1.0
+
+      - name: Setup Drupal
+        run: |
+          drupal-tr
+
+      - name: Run tests
+        run: TEST_RUNNER=core drupal-tr run-tests
