@@ -41,6 +41,7 @@ jobs:
 
       - name: Setup Drupal
         run: |
+          composer require drush/drush:^11.0
           drupal-tr
 
       - name: Run tests
