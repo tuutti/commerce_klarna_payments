@@ -5,13 +5,8 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
 use Drupal\commerce_klarna_payments\ApiManager;
-use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
-use Drupal\commerce_order\Entity\OrderInterface;
-use Drupal\commerce_payment\Entity\PaymentInterface;
-use Drupal\commerce_payment\Exception\PaymentGatewayException;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
 use Klarna\OrderManagement\Model\Order;
@@ -25,96 +20,17 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class OrderTransitionSubscriber implements EventSubscriberInterface {
 
   /**
-   * The klarna connector.
-   *
-   * @var \Drupal\commerce_klarna_payments\ApiManager
-   */
-  protected $apiManager;
-
-  /**
-   * The logger.
-   *
-   * @var \Psr\Log\LoggerInterface
-   */
-  protected $logger;
-
-  /**
-   * The payment storage.
-   *
-   * @var \Drupal\commerce_payment\PaymentStorageInterface
-   */
-  protected $paymentStorage;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
    *   The Klarna connector.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
-   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
-   *   The entity type manager.
    */
-  public function __construct(ApiManager $apiManager, LoggerInterface $logger, EntityTypeManagerInterface $entityTypeManager) {
-    $this->apiManager = $apiManager;
-    $this->logger = $logger;
-    $this->paymentStorage = $entityTypeManager->getStorage('commerce_payment');
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function getPayment(OrderInterface $order) : ? PaymentInterface {
-    $payments = $this->paymentStorage->loadMultipleByOrder($order);
-    $plugin = $this->apiManager->getPlugin($order);
-
-    if (empty($payments)) {
-      return NULL;
-    }
-    $klarna_payment = NULL;
-
-    foreach ($payments as $payment) {
-      if ($payment->getPaymentGatewayId() !== $plugin->getEntityId() || $payment->getState()->value !== 'authorization') {
-        continue;
-      }
-      $klarna_payment = $payment;
-    }
-    return $klarna_payment ?? NULL;
-  }
-
-  /**
-   * Syncs payments from Klarna merchant panel.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Klarna\OrderManagement\Model\Order $orderResponse
-   *   The order response.
-   * @param \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin
-   *   The payment plugin.
-   *
-   * @throws \Drupal\Core\Entity\EntityStorageException
-   */
-  private function syncPayments(OrderInterface $order, Order $orderResponse, Klarna $plugin) : void {
-    $payment = $this->getPayment($order);
-
-    foreach ($orderResponse->getCaptures() as $capture) {
-      // Skip already synced payments.
-      if ($this->paymentStorage->loadByRemoteId($capture->getCaptureId())) {
-        continue;
-      }
-      $paymentAmount = UnitConverter::toPrice($capture->getCapturedAmount(), $orderResponse->getPurchaseCurrency());
-
-      // Attempt to use payment created by Klarna::onReturn().
-      if (!$payment || $payment->isCompleted()) {
-        $payment = $plugin->createPayment($order);
-      }
-      $payment->getState()
-        ->applyTransitionById('capture');
-      $payment
-        ->setAmount($paymentAmount)
-        ->setRemoteId($capture->getCaptureId())
-        ->save();
-    }
+  public function __construct(
+    protected ApiManager $apiManager,
+    protected LoggerInterface $logger
+  ) {
   }
 
   /**
@@ -138,58 +54,19 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       return;
     }
 
-    // Track remaining balance to figure out if we need to make
-    // any further captures.
-    $remainingBalance = $order->getTotalPrice();
-
     try {
       $plugin = $this->apiManager->getPlugin($order);
-    }
-    catch (NonKlarnaOrderException $e) {
-      return;
-    }
 
-    $orderResponse = $this->apiManager->getOrder($order);
-
-    // Sync all captures made via merchant panel.
-    $this->syncPayments($order, $orderResponse, $plugin);
-
-    // We shouldn't make any captures if the order differs from the one on
-    // merchant panel and instead instruct the user to do any further
-    // actions via merchant panel.
-    if (!$this->apiManager->orderIsInSync($order, $orderResponse)) {
-
-      // Out of sync order must be captured before we can place the order.
-      if ($orderResponse->getStatus() !== 'CAPTURED') {
-        throw new PaymentGatewayException(
-          sprintf('Order (%s) is out of sync, but not fully captured yet.', $order->id())
-        );
+      $orderResponse = $this->apiManager->getOrder($order);
+      // Nothing to do if order is captured fully. This will leave the local
+      // payment uncaptured.
+      if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
+        return;
       }
-
-      // Mark order as paid in full if Klarna says the order is captured.
-      $payment = $this->getPayment($order) ?? $plugin->createPayment($order);
-      $payment->getState()
-        ->applyTransitionById('capture');
-      $payment
-        ->setAmount($order->getTotalPrice())
-        ->save();
-
-      return;
+      $payment = $plugin->getOrCreatePayment($order);
+      $plugin->capturePayment($payment, $order->getBalance());
     }
-
-    // Subtract completed payments from total remaining balance.
-    foreach ($this->paymentStorage->loadMultipleByOrder($order) as $payment) {
-      if ($payment->isCompleted()) {
-        $remainingBalance = $remainingBalance->subtract($payment->getAmount());
-      }
-    }
-
-    // Create capture with remaining balance.
-    if (!$remainingBalance->isZero() && $remainingBalance->isPositive()) {
-      // Attempt to use local payment made in Klarna::onReturn().
-      $payment = $this->getPayment($order) ?? $plugin->createPayment($order);
-
-      $plugin->capturePayment($payment, $remainingBalance);
+    catch (NonKlarnaOrderException | ApiException) {
     }
   }
 
@@ -222,13 +99,19 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
         ]));
     }
     catch (ApiException | NonKlarnaOrderException $e) {
+      $this->logger->error(
+        new FormattableMarkup('Failed to update merchant references (#@order)  @message', [
+          '@message' => $e->getMessage(),
+          '@order' => $order->id(),
+        ])
+      );
     }
   }
 
   /**
    * {@inheritdoc}
    */
-  public static function getSubscribedEvents() {
+  public static function getSubscribedEvents() : array {
     $events = [];
 
     // Subscribe to every known transition phase that leads to 'completed'

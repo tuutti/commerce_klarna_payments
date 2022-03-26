@@ -10,7 +10,7 @@ namespace Drupal\commerce_klarna_payments\Event;
 final class Events {
 
   /**
-   * An event to be run when we acknownledge the order.
+   * An event to be run when we acknowledge the order.
    */
   public const ACKNOWLEDGE_ORDER = 'commerce_klarna_payments.acknowledge_order';
 
@@ -40,22 +40,22 @@ final class Events {
   public const VOID_PAYMENT = 'commerce_klarna_payments.void_payment';
 
   /**
-   * This even is ran when fraud status is rejected.
+   * This even is run when fraud status is rejected.
    */
   public const FRAUD_NOTIFICATION_REJECTED = 'commerce_klarna_payments.fraud_notification_rejected';
 
   /**
-   * This even is ran when fraud status is accepted.
+   * This even is run when fraud status is accepted.
    */
   public const FRAUD_NOTIFICATION_ACCEPTED = 'commerce_klarna_payments.fraud_notification_accepted';
 
   /**
-   * This even is ran when fraud status is stopped.
+   * This even is run when fraud status is stopped.
    */
   public const FRAUD_NOTIFICATION_STOPPED = 'commerce_klarna_payments.fraud_notification_stopped';
 
   /**
-   * This even is ran when new refund is created.
+   * This even is run when new refund is created.
    */
   public const REFUND_CREATE = 'commerce_klarna_payments.refund_create';
 

@@ -26,22 +26,14 @@ class RequestBuilder {
   use OptionsHelper;
 
   /**
-   * The language manager.
-   *
-   * @var \Drupal\Core\Language\LanguageManagerInterface
-   */
-  protected $languageManager;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\Core\Language\LanguageManagerInterface $languageManager
    *   The language manager.
    */
   public function __construct(
-    LanguageManagerInterface $languageManager
+    protected LanguageManagerInterface $languageManager
   ) {
-    $this->languageManager = $languageManager;
   }
 
   /**

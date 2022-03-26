@@ -7,7 +7,7 @@ namespace Drupal\commerce_klarna_payments;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\KlarnaInterface;
 
 /**
- * Provides a helper trait for Klarna's options setting.
+ * Provides a helper trait for Klarna options setting.
  */
 trait OptionsHelper {
 

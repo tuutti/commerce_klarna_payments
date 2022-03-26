@@ -34,27 +34,6 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   protected $entity;
 
   /**
-   * The logger.
-   *
-   * @var \Psr\Log\LoggerInterface
-   */
-  private $logger;
-
-  /**
-   * The api manager.
-   *
-   * @var \Drupal\commerce_klarna_payments\ApiManager
-   */
-  private $apiManager;
-
-  /**
-   * The messenger.
-   *
-   * @var \Drupal\Core\Messenger\MessengerInterface
-   */
-  private $messenger;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
@@ -64,17 +43,14 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    *   The messenger.
    */
-  public function __construct(ApiManager $apiManager, LoggerInterface $logger, MessengerInterface $messenger) {
-    $this->apiManager = $apiManager;
-    $this->logger = $logger;
-    $this->messenger = $messenger;
+  public function __construct(private ApiManager $apiManager, private LoggerInterface $logger, private MessengerInterface $messenger) {
   }
 
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container) {
-    return new static(
+  public static function create(ContainerInterface $container) : self {
+    return new self(
       $container->get('commerce_klarna_payments.api_manager'),
       $container->get('logger.channel.commerce_klarna_payments'),
       $container->get('messenger')
@@ -84,7 +60,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   /**
    * {@inheritdoc}
    */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
+  public function buildConfigurationForm(array $form, FormStateInterface $form_state) : array {
     $form = parent::buildConfigurationForm($form, $form_state);
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
     $plugin = $this->entity
@@ -110,7 +86,6 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
 
       $form['payment_methods'] = [
         '#theme' => 'commerce_klarna_payments_container',
-        // @todo Check if we can cache this.
         '#cache' => ['max-age' => 0],
         '#attached' => [
           'library' => ['commerce_klarna_payments/klarna-js-sdk'],
@@ -155,7 +130,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   /**
    * {@inheritdoc}
    */
-  protected function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) {
+  protected function buildRedirectForm(array $form, FormStateInterface $form_state, $redirect_url, array $data = [], $redirect_method = self::REDIRECT_GET) : array {
     $form['#process'][] = [get_class($this), 'processRedirectForm'];
     $form['#redirect_url'] = $redirect_url;
 
@@ -165,8 +140,8 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   /**
    * {@inheritdoc}
    */
-  public static function processRedirectForm(array $element, FormStateInterface $form_state, array &$complete_form) {
-    $element = parent::processRedirectForm($element, $form_state, $complete_form);
+  public static function processRedirectForm(array $form, FormStateInterface $form_state, array &$complete_form) : array {
+    $form = parent::processRedirectForm($form, $form_state, $complete_form);
 
     foreach (Element::children($complete_form['actions']) as $name) {
       if ($complete_form['actions'][$name]['#type'] !== 'submit') {
@@ -176,12 +151,12 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
         // Disable continue button if form has errors.
         $complete_form['actions'][$name]['#attributes']['disabled'] = 'disabled';
       }
-      // Append appropriate selector so we can disable the submit button until
-      // we have authorization token.
+      // Append appropriate selector, so we can disable the submit button until
+      // we have an authorization token (populated by Klarna JS widget).
       $complete_form['actions'][$name]['#attributes']['data-klarna-selector'] = 'submit';
       $complete_form['actions'][$name]['#value'] = new TranslatableMarkup('Continue');
     }
-    return $element;
+    return $form;
   }
 
 }

@@ -13,6 +13,6 @@ services:
 
   commerce_klarna_payments.order_transition:
     class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber
-    arguments: ['@commerce_klarna_payments.api_manager', '@logger.channel.commerce_klarna_payments', '@entity_type.manager']
+    arguments: ['@commerce_klarna_payments.api_manager', '@logger.channel.commerce_klarna_payments']
     tags:
       - { name: event_subscriber }

@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
 use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\Order;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -17,6 +18,7 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterf
 use Drupal\commerce_price\Price;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Klarna\ApiException;
 use Klarna\Configuration;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -46,19 +48,19 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    *
    * @var \Drupal\commerce_klarna_payments\ApiManager
    */
-  protected $apiManager;
+  private ApiManager $apiManager;
 
   /**
    * The logger.
    *
    * @var \Psr\Log\LoggerInterface
    */
-  protected $logger;
+  private LoggerInterface $logger;
 
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) : self {
     /** @var self $instance */
     $instance = parent::create($container, $configuration, $plugin_definition, $plugin_definition);
     $instance->apiManager = $container->get('commerce_klarna_payments.api_manager');
@@ -68,37 +70,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Sets the connector.
-   *
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
-   *   The connector.
-   *
-   * @return $this
-   *   The self.
-   */
-  public function setApiManager(ApiManager $apiManager) : self {
-    $this->apiManager = $apiManager;
-    return $this;
-  }
-
-  /**
-   * Sets the logger.
-   *
-   * @param \Psr\Log\LoggerInterface $logger
-   *   The logger.
-   *
-   * @return $this
-   *   The self.
-   */
-  public function setLogger(LoggerInterface $logger) : self {
-    $this->logger = $logger;
-    return $this;
-  }
-
-  /**
    * {@inheritdoc}
    */
-  public function defaultConfiguration() {
+  public function defaultConfiguration() : array {
     return [
       'mode' => 'test',
       'username' => '',
@@ -154,23 +128,13 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   }
 
   /**
-   * Gets the entity id (plugin id).
-   *
-   * @return string
-   *   The entity id.
-   */
-  public function getEntityId() : string {
-    return $this->parentEntity->id();
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function getReturnUri(OrderInterface $order, string $routeName, array $arguments = []) : string {
     $arguments = array_merge($arguments, [
       'step' => 'payment',
       'commerce_order' => $order->id(),
-      'commerce_payment_gateway' => $this->getEntityId(),
+      'commerce_payment_gateway' => $this->parentEntity->id(),
     ]);
 
     return (new Url($routeName, $arguments, ['absolute' => TRUE]))
@@ -181,7 +145,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    * {@inheritdoc}
    */
   public function getHost() : string {
-    $host = static::REGIONS[$this->getRegion()][$this->isLive() ? 'live' : 'test'] ?? '';
+    $host = self::REGIONS[$this->getRegion()][$this->isLive() ? 'live' : 'test'] ?? '';
 
     if ($host === '') {
       throw new \InvalidArgumentException('Host not found.');
@@ -199,7 +163,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $configuration = (new Configuration())
       ->setUsername($this->getUsername())
       ->setPassword($this->getPassword())
-      ->setUserAgent('Libary drupal-klarna-payments-v1');
+      ->setUserAgent('Library drupal-klarna-payments-v1');
 
     $host = $this->getHost();
     $configuration->setHost($host);
@@ -210,7 +174,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
+  public function buildConfigurationForm(array $form, FormStateInterface $form_state) : array {
     $form = parent::buildConfigurationForm($form, $form_state);
 
     $form['username'] = [
@@ -263,7 +227,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
+  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) : void {
     parent::submitConfigurationForm($form, $form_state);
 
     if (!$form_state->getErrors()) {
@@ -274,7 +238,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function onReturn(OrderInterface $order, Request $request) {
+  public function onReturn(OrderInterface $order, Request $request) : void {
     try {
       $orderResponse = $this->apiManager->getOrder($order);
 
@@ -282,13 +246,13 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
 
       if (!in_array($orderResponse->getStatus(), $allowed)) {
         throw new PaymentGatewayException(
-          $this->t('Order is in invalid state [@state], one of @expected expected.', [
+          (string) $this->t('Order is in invalid state [@state], one of @expected expected.', [
             '@state' => $orderResponse->getStatus(),
             '@expected' => implode(',', $allowed),
           ])
         );
       }
-      $this->createPayment($order);
+      $this->getOrCreatePayment($order);
       $this->apiManager->acknowledgeOrder($order, $orderResponse);
     }
     catch (\Exception $e) {
@@ -308,7 +272,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response.
    */
-  public function onNotify(Request $request) {
+  public function onNotify(Request $request) : Response {
     /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
     if ((!$order_id = $request->query->get('commerce_order')) || !$order = Order::load($order_id)) {
       throw new PaymentGatewayException('Order not found.');
@@ -319,7 +283,12 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     if ((!isset($content->order_id, $content->event_type)) || $content->order_id !== $order->getData('klarna_order_id')) {
       throw new AccessDeniedException('Order id mismatch.');
     }
-    $this->apiManager->handleNotificationEvent($order, $content->event_type);
+    try {
+      $this->apiManager->handleNotificationEvent($order, $content->event_type);
+    }
+    catch (NonKlarnaOrderException | ApiException) {
+      throw new AccessDeniedException('Failed to handle notification event.');
+    }
 
     $statuses = [
       'FRAUD_RISK_REJECTED',
@@ -329,7 +298,11 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     if ($this->cancelFraudulentOrders() && in_array($content->event_type, $statuses)) {
       $order->getState()->applyTransitionById('cancel');
 
-      $this->apiManager->voidPayment($order);
+      try {
+        $this->apiManager->voidPayment($order);
+      }
+      catch (NonKlarnaOrderException | ApiException) {
+      }
     }
 
     return new Response('', 200);
@@ -341,23 +314,31 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Drupal\commerce_price\Price|null $amount
-   *   The payment maount.
+   *   The payment amount.
    *
    * @return \Drupal\commerce_payment\Entity\PaymentInterface
    *   The payment.
    */
-  public function createPayment(OrderInterface $order, Price $amount = NULL) : PaymentInterface {
-    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
+  public function getOrCreatePayment(OrderInterface $order, Price $amount = NULL) : PaymentInterface {
+    /** @var \Drupal\commerce_payment\PaymentStorageInterface $paymentStorage */
+    $paymentStorage = $this->entityTypeManager
+      ->getStorage('commerce_payment');
+
+    if ($payments = $paymentStorage->loadMultipleByOrder($order)) {
+      return reset($payments);
+    }
 
     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
-    $payment = $payment_storage->create([
+    $payment = $paymentStorage->create([
       // If not specified, use the entire amount.
       'amount' => $amount ?: $order->getBalance(),
       'payment_gateway' => $this->parentEntity->id(),
       'order_id' => $order->id(),
       'test' => !$this->isLive(),
     ]);
-    $payment->getState()->applyTransitionById('authorize');
+    $payment
+      ->getState()
+      ->applyTransitionById('authorize');
 
     $payment->save();
 
@@ -367,7 +348,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
+  public function capturePayment(PaymentInterface $payment, Price $amount = NULL) : void {
     $this->assertPaymentState($payment, ['authorization']);
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
@@ -389,7 +370,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function voidPayment(PaymentInterface $payment) {
+  public function voidPayment(PaymentInterface $payment) : void {
     $this->assertPaymentState($payment, ['authorization']);
     $order = $payment->getOrder();
 
@@ -407,7 +388,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+  public function refundPayment(PaymentInterface $payment, Price $amount = NULL) : void {
     $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();

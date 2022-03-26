@@ -90,7 +90,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $this->populateHttpClient($order, $responses);
 
     // Account for payment made in Klarna::onReturn() callback.
-    $this->plugin->createPayment($order);
+    $this->plugin->getOrCreatePayment($order);
 
     foreach (['place', 'validate', 'fulfill'] as $state) {
       $order = OrderEntity::load($order->id());
@@ -325,7 +325,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $this->populateHttpClient($order, $responses);
 
     // Account for payment made in Klarna::onReturn() callback.
-    $this->plugin->createPayment($order);
+    $this->plugin->getOrCreatePayment($order);
 
     $payments = $this->paymentStorage->loadMultipleByOrder($order);
     $this->assertCount(1, $payments);

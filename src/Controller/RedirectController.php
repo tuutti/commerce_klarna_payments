@@ -29,34 +29,6 @@ class RedirectController implements ContainerInjectionInterface {
   use DependencySerializationTrait;
 
   /**
-   * The checkout manager.
-   *
-   * @var \Drupal\commerce_checkout\CheckoutOrderManager
-   */
-  protected $checkoutOrderManager;
-
-  /**
-   * The messenger.
-   *
-   * @var \Drupal\Core\Messenger\MessengerInterface
-   */
-  protected $messenger;
-
-  /**
-   * The logger.
-   *
-   * @var \Psr\Log\LoggerInterface
-   */
-  protected $logger;
-
-  /**
-   * The api manager.
-   *
-   * @var \Drupal\commerce_klarna_payments\ApiManager
-   */
-  protected $apiManager;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_checkout\CheckoutOrderManager $checkoutOrderManager
@@ -69,21 +41,17 @@ class RedirectController implements ContainerInjectionInterface {
    *   The api manager.
    */
   public function __construct(
-    CheckoutOrderManager $checkoutOrderManager,
-    MessengerInterface $messenger,
-    ApiManager $apiManager,
-    LoggerInterface $logger
+    protected CheckoutOrderManager $checkoutOrderManager,
+    protected MessengerInterface $messenger,
+    protected ApiManager $apiManager,
+    protected LoggerInterface $logger
   ) {
-    $this->checkoutOrderManager = $checkoutOrderManager;
-    $this->messenger = $messenger;
-    $this->apiManager = $apiManager;
-    $this->logger = $logger;
   }
 
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container) {
+  public static function create(ContainerInterface $container) : static {
     return new static(
       $container->get('commerce_checkout.checkout_order_manager'),
       $container->get('messenger'),

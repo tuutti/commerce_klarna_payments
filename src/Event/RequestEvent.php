@@ -5,8 +5,8 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Event;
 
 use Drupal\commerce_order\Entity\OrderInterface;
+use Drupal\Component\EventDispatcher\Event;
 use Klarna\Model\ModelInterface;
-use Symfony\Component\EventDispatcher\Event;
 
 /**
  * Event to store request data.
@@ -18,29 +18,41 @@ final class RequestEvent extends Event {
    *
    * @var \Drupal\commerce_order\Entity\OrderInterface
    */
-  private $order;
+  private OrderInterface $order;
 
   /**
    * The model data.
    *
    * @var \Klarna\Model\ModelInterface
    */
-  private $data;
+  private ModelInterface $data;
 
   /**
    * Constructs a new instance.
    *
+   * @param string $eventName
+   *   The event name.
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Klarna\Model\ModelInterface|null $data
    *   The data.
    */
-  public function __construct(OrderInterface $order, ModelInterface $data = NULL) {
+  public function __construct(private string $eventName, OrderInterface $order, ModelInterface $data = NULL) {
     $this->order = clone $order;
 
     if ($data) {
       $this->setData($data);
     }
+  }
+
+  /**
+   * Gets the event name.
+   *
+   * @return string
+   *   The event name.
+   */
+  public function getEventName() : string {
+    return $this->eventName;
   }
 
   /**
