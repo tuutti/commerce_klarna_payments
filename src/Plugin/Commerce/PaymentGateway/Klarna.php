@@ -199,7 +199,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $configuration = (new Configuration())
       ->setUsername($this->getUsername())
       ->setPassword($this->getPassword())
-      ->setUserAgent('Libary drupal-klarna-payments-v1');
+      ->setUserAgent('Library drupal-klarna-payments-v1');
 
     $host = $this->getHost();
     $configuration->setHost($host);
