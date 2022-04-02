@@ -58,9 +58,15 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       $plugin = $this->apiManager->getPlugin($order);
 
       $orderResponse = $this->apiManager->getOrder($order);
-      // Nothing to do if order is captured fully. This will leave the local
-      // payment uncaptured.
+      // Mark local payment as captured if the Klarna order is captured before
+      // ::capturePayment() is called.
       if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
+        $payment = $plugin->getOrCreatePayment($order);
+        $payment->getState()
+          ->applyTransitionById('capture');
+        $payment->setAmount($order->getTotalPrice())
+          ->save();
+
         return;
       }
       $payment = $plugin->getOrCreatePayment($order);

@@ -324,7 +324,12 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $paymentStorage = $this->entityTypeManager
       ->getStorage('commerce_payment');
 
-    if ($payments = $paymentStorage->loadMultipleByOrder($order)) {
+    $parameters = [
+      'order_id' => $order->id(),
+      'payment_gateway' => $this->parentEntity->id(),
+    ];
+
+    if ($payments = $paymentStorage->loadByProperties($parameters)) {
       return reset($payments);
     }
 
