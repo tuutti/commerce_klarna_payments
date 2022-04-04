@@ -33,6 +33,7 @@ use Klarna\OrderManagement\Model\RefundObject;
 final class ApiManager {
 
   use ObjectSerializerTrait;
+  use PaymentGatewayPluginTrait;
 
   /**
    * The event dispatcher.
@@ -81,24 +82,20 @@ final class ApiManager {
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
+   * @deprecated in commerce_klarna_payments:2.0.0-beta7 and is removed from
+   * commerce_klarna_payments:3.0.0.
+   * Use PaymentGatewayPlugin::getPaymentPlugin() instead.
+   *
+   * @see https://www.drupal.org/project/commerce_klarna_payments/issues/3271766
+   *
+   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\KlarnaInterface
    *   The payment plugin.
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException|
    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    */
-  public function getPlugin(OrderInterface $order) : ? KlarnaInterface {
-    $gateway = $order->get('payment_gateway');
-
-    if ($gateway->isEmpty()) {
-      throw new \InvalidArgumentException('Payment gateway not found.');
-    }
-    $plugin = $gateway->first()->entity->getPlugin();
-
-    if (!$plugin instanceof KlarnaInterface) {
-      throw new NonKlarnaOrderException('Payment gateway not instanceof Klarna.');
-    }
-    return $plugin;
+  public function getPlugin(OrderInterface $order) : KlarnaInterface {
+    return $this->getPaymentGatewayPlugin($order);
   }
 
   /**

@@ -7,10 +7,12 @@ namespace Drupal\commerce_klarna_payments\EventSubscriber;
 use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
+use Drupal\commerce_klarna_payments\PaymentGatewayPluginTrait;
 use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
@@ -23,6 +25,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Handles order capturing when the order is placed.
  */
 class OrderTransitionSubscriber implements EventSubscriberInterface {
+
+  use PaymentGatewayPluginTrait;
 
   /**
    * The klarna connector.
@@ -66,7 +70,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    */
   protected function getPayment(OrderInterface $order) : ? PaymentInterface {
     $payments = $this->paymentStorage->loadMultipleByOrder($order);
-    $plugin = $this->apiManager->getPlugin($order);
+    $plugin = $this->getPaymentGatewayPlugin($order);
 
     if (empty($payments)) {
       return NULL;
@@ -143,11 +147,18 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     $remainingBalance = $order->getTotalPrice();
 
     try {
-      $plugin = $this->apiManager->getPlugin($order);
+      $plugin = $this->getPaymentGatewayPlugin($order);
     }
     catch (NonKlarnaOrderException $e) {
       return;
     }
+
+    $plugin->debug(
+      (string) new FormattableMarkup('Calling onOrderPlace() for @order using @workflow', [
+        '@order' => $order->id(),
+        '@workflow' => $event->getWorkflow()->getId(),
+      ])
+    );
 
     $orderResponse = $this->apiManager->getOrder($order);
 
