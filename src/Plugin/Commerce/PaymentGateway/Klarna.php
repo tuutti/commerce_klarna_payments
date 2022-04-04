@@ -98,26 +98,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * {@inheritdoc}
    */
-  public function debug(string $markup, array $context = []) : void {
-    if (!$this->inDebugMode()) {
-      return;
-    }
-    $this->logger->debug($markup, $context);
-  }
-
-  /**
-   * Checks if we're in debug mode.
-   *
-   * @return bool
-   *   TRUE if debug mode is enabled.
-   */
-  public function inDebugMode() : bool {
-    return $this->configuration['debug_mode'] ?? FALSE;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function defaultConfiguration() {
     return [
       'mode' => 'test',
@@ -125,7 +105,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       'password' => '',
       'region' => 'eu',
       'cancel_fraudulent_orders' => FALSE,
-      'debug_mode' => FALSE,
       'options' => [],
     ] + parent::defaultConfiguration();
   }
@@ -257,12 +236,6 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       ],
     ];
 
-    $form['debug_mode'] = [
-      '#type' => 'checkbox',
-      '#title' => $this->t('Debug mode'),
-      '#default_value' => $this->configuration['debug_mode'],
-    ];
-
     $form['cancel_fraudulent_orders'] = [
       '#title' => $this->t('Cancel fraudulent orders automatically (US & UK only)'),
       '#type' => 'checkbox',
@@ -368,7 +341,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
    *   The order.
    * @param \Drupal\commerce_price\Price|null $amount
-   *   The payment maount.
+   *   The payment amount.
    *
    * @return \Drupal\commerce_payment\Entity\PaymentInterface
    *   The payment.

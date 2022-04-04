@@ -12,7 +12,6 @@ use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
-use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
@@ -152,13 +151,6 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     catch (NonKlarnaOrderException $e) {
       return;
     }
-
-    $plugin->debug(
-      (string) new FormattableMarkup('Calling onOrderPlace() for @order using @workflow', [
-        '@order' => $order->id(),
-        '@workflow' => $event->getWorkflow()->getId(),
-      ])
-    );
 
     $orderResponse = $this->apiManager->getOrder($order);
 

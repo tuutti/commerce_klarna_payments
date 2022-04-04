@@ -13,9 +13,6 @@ commerce_payment.commerce_payment_gateway.plugin.klarna_payments:
     region:
       type: string
       label: 'Region'
-    debug_mode:
-      type: boolean
-      label: 'Debug mode'
     cancel_fraudulent_orders:
       type: boolean
       label: 'Cancel fraudulent orders automatically'

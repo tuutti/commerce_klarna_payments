@@ -80,14 +80,4 @@ interface KlarnaInterface extends OffsitePaymentGatewayInterface {
    */
   public function getClientConfiguration() : Configuration;
 
-  /**
-   * Logs the debug message.
-   *
-   * @param string $markup
-   *   The markup to log.
-   * @param array $context
-   *   The context.
-   */
-  public function debug(string $markup, array $context = []) : void;
-
 }
