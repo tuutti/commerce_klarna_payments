@@ -135,7 +135,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $order->get('payment_gateway')->willReturn($list->reveal());
 
     $sut = $this->createSut($order->reveal());
-    $sut->getPlugin($order->reveal());
+    $sut->getPaymentPlugin($order->reveal());
   }
 
   /**
@@ -158,7 +158,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $order->get('payment_gateway')->willReturn($list->reveal());
 
     $sut = $this->createSut($order->reveal());
-    $sut->getPlugin($order->reveal());
+    $sut->getPaymentPlugin($order->reveal());
   }
 
   /**
@@ -171,7 +171,7 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $this->populateOrderPluginStub($order);
 
     $sut = $this->createSut($order->reveal());
-    $plugin = $sut->getPlugin($order->reveal());
+    $plugin = $sut->getPaymentPlugin($order->reveal());
 
     $this->assertInstanceOf(KlarnaInterface::class, $plugin);
   }

@@ -33,6 +33,7 @@ use Klarna\OrderManagement\Model\RefundObject;
 final class ApiManager {
 
   use ObjectSerializerTrait;
+  use PaymentPluginTrait;
 
   /**
    * Constructs a new instance.
@@ -49,31 +50,6 @@ final class ApiManager {
     private RequestBuilder $requestBuilder,
     private ClientInterface $client
   ) {
-  }
-
-  /**
-   * Gets the plugin for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   *   The payment plugin.
-   *
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
-   */
-  public function getPlugin(OrderInterface $order) : KlarnaInterface {
-    $gateway = $order->get('payment_gateway');
-
-    if ($gateway->isEmpty()) {
-      throw new NonKlarnaOrderException('Payment gateway not found.');
-    }
-    $plugin = $gateway->first()->entity->getPlugin();
-
-    if (!$plugin instanceof KlarnaInterface) {
-      throw new NonKlarnaOrderException('Payment plugin is not Klarna.');
-    }
-    return $plugin;
   }
 
   /**
@@ -325,6 +301,10 @@ final class ApiManager {
       'FRAUD_RISK_STOPPED' => Events::FRAUD_NOTIFICATION_STOPPED,
     ];
 
+    if (!$fraudStatus !== $orderResponse->getFraudStatus()) {
+      throw new \InvalidArgumentException('Fraud status does not match.');
+    }
+
     if (!isset($statusMap[$fraudStatus])) {
       throw new \InvalidArgumentException('Invalid fraud status.');
     }
@@ -345,7 +325,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getSessionsApi(OrderInterface $order) : SessionsApi {
-    return new SessionsApi($this->client, $this->getPlugin($order)->getClientConfiguration());
+    return new SessionsApi($this->client, $this->getPaymentPlugin($order)->getClientConfiguration());
   }
 
   /**
@@ -360,7 +340,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getCapturesApi(OrderInterface $order) : CapturesApi {
-    return new CapturesApi($this->client, $this->getPlugin($order)->getClientConfiguration());
+    return new CapturesApi($this->client, $this->getPaymentPlugin($order)->getClientConfiguration());
   }
 
   /**
@@ -375,7 +355,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getPaymentOrderApi(OrderInterface $order) : PaymentOrdersApi {
-    return new PaymentOrdersApi($this->client, $this->getPlugin($order)->getClientConfiguration());
+    return new PaymentOrdersApi($this->client, $this->getPaymentPlugin($order)->getClientConfiguration());
   }
 
   /**
@@ -390,7 +370,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getOrderManagementApi(OrderInterface $order) : OrdersApi {
-    return new OrdersApi($this->client, $this->getPlugin($order)->getClientConfiguration());
+    return new OrdersApi($this->client, $this->getPaymentPlugin($order)->getClientConfiguration());
   }
 
   /**
@@ -405,7 +385,7 @@ final class ApiManager {
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
   public function getRefundsApi(OrderInterface $order) : RefundsApi {
-    return new RefundsApi($this->client, $this->getPlugin($order)->getClientConfiguration());
+    return new RefundsApi($this->client, $this->getPaymentPlugin($order)->getClientConfiguration());
   }
 
   /**

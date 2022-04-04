@@ -7,8 +7,10 @@ namespace Drupal\commerce_klarna_payments\Request\Payment;
 use Drupal\address\AddressInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\OptionsHelper;
+use Drupal\commerce_klarna_payments\PaymentPluginTrait;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
+use Drupal\commerce_product\Entity\ProductVariationInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\OrderManagement\Model\Capture;
@@ -24,6 +26,7 @@ use Klarna\Payments\Model\Session;
 class RequestBuilder {
 
   use OptionsHelper;
+  use PaymentPluginTrait;
 
   /**
    * Constructs a new instance.
@@ -67,12 +70,9 @@ class RequestBuilder {
    *
    * @return \Klarna\Payments\Model\Session
    *   The request data.
-   *
-   * @todo Support promotions.
    */
   public function createSessionRequest(OrderInterface $order) : Session {
-    /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
-    $plugin = $order->payment_gateway->entity->getPlugin();
+    $plugin = $this->getPaymentPlugin($order);
 
     $session = new Session();
 
@@ -112,17 +112,10 @@ class RequestBuilder {
       $session->setLocale($this->getLocale($purchaseCountry));
     }
 
-    $totalTax   = 0;
     $orderLines = [];
 
     foreach ($order->getItems() as $item) {
-      $orderLine = $this->createOrderLine($item);
-      $orderLines[] = $orderLine;
-
-      if ($orderLine->getTotalTaxAmount() !== NULL) {
-        // Calculate total tax amount.
-        $totalTax += $orderLine->getTotalTaxAmount();
-      }
+      $orderLines[] = $this->createOrderLine($item);
     }
 
     // Add shipping info, if present.
@@ -146,12 +139,16 @@ class RequestBuilder {
           $shippingOrderItem->setTaxRate(UnitConverter::toTaxRate($taxAdjustment->getPercentage()))
             ->setTotalTaxAmount(UnitConverter::toAmount($taxAdjustment->getAmount()));
         }
-
-        if ($shippingOrderItem->getTotalTaxAmount() !== NULL) {
-          $totalTax += $shippingOrderItem->getTotalTaxAmount();
-        }
         $orderLines[] = $shippingOrderItem;
       }
+    }
+    $totalTax = 0;
+
+    foreach ($orderLines as $orderLine) {
+      if (!$orderLine->getTotalTaxAmount()) {
+        continue;
+      }
+      $totalTax += $orderLine->getTotalTaxAmount();
     }
 
     $session->setOrderTaxAmount($totalTax)
@@ -177,9 +174,14 @@ class RequestBuilder {
       ->setTotalAmount(UnitConverter::toAmount($item->getAdjustedTotalPrice()));
 
     if ($purchasedEntity = $item->getPurchasedEntity()) {
-      // Use purchased entity type + id as reference. For example:
+      // Use purchased entity type + id as reference by default. For example:
       // commerce_product_variation:1.
-      $orderItem->setReference(sprintf('%s:%s', $purchasedEntity->getEntityTypeId(), $purchasedEntity->id()));
+      $reference = sprintf('%s:%s', $purchasedEntity->getEntityTypeId(), $purchasedEntity->id());
+
+      if ($purchasedEntity instanceof ProductVariationInterface) {
+        $reference = $purchasedEntity->getSku();
+      }
+      $orderItem->setReference($reference);
     }
 
     foreach ($item->getAdjustments(['tax']) as $adjustment) {

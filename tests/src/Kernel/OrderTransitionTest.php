@@ -70,7 +70,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
       $this->createMockHttpClient($responses)
     );
 
-    $this->plugin = $apiManager->getPlugin($order)
+    $this->plugin = $apiManager->getPaymentPlugin($order)
       ->setApiManager($apiManager);
 
     $this->container->set('commerce_klarna_payments.api_manager', $apiManager);

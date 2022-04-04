@@ -55,7 +55,7 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      $plugin = $this->apiManager->getPlugin($order);
+      $plugin = $this->apiManager->getPaymentPlugin($order);
 
       $orderResponse = $this->apiManager->getOrder($order);
       // Mark local payment as captured if the Klarna order is captured before
