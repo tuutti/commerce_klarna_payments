@@ -193,10 +193,16 @@ final class ApiManager {
     if (!$orderResponse) {
       $orderResponse = $this->getOrder($order);
     }
-
-    return UnitConverter::toPrice($orderResponse->getOrderAmount(), $order->getTotalPrice()->getCurrencyCode())
-      ->equals($order->getTotalPrice());
-
+    // Check if there is a total price on the order.
+    // @see https://www.drupal.org/i/3278371.
+    $orderTotal = $order->getTotalPrice();
+    if ($orderTotal) {
+      return UnitConverter::toPrice(
+        $orderResponse->getOrderAmount(),
+        $order->getTotalPrice()->getCurrencyCode()
+      )->equals($order->getTotalPrice());
+    }
+    return FALSE;
   }
 
   /**
