@@ -5,7 +5,6 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce_checkout\CheckoutOrderManager;
-use Drupal\commerce_checkout\CheckoutOrderManagerInterface;
 use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
@@ -31,41 +30,6 @@ class PushEndpointController implements ContainerInjectionInterface {
   use DependencySerializationTrait;
 
   /**
-   * The checkout manager.
-   *
-   * @var \Drupal\commerce_checkout\CheckoutOrderManager
-   */
-  protected CheckoutOrderManagerInterface $checkoutOrderManager;
-
-  /**
-   * The api manager.
-   *
-   * @var \Drupal\commerce_klarna_payments\ApiManager
-   */
-  protected ApiManagerInterface $apiManager;
-
-  /**
-   * Entity type manager.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
-   */
-  protected EntityTypeManagerInterface $entityTypeManager;
-
-  /**
-   * Logger.
-   *
-   * @var \Drupal\Core\Logger\LoggerChannelInterface
-   */
-  protected LoggerChannelInterface $logger;
-
-  /**
-   * The event dispatcher.
-   *
-   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
-   */
-  protected EventDispatcherInterface $eventDispatcher;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_checkout\CheckoutOrderManager $checkoutOrderManager
@@ -76,21 +40,16 @@ class PushEndpointController implements ContainerInjectionInterface {
    *   Entity type manager.
    * @param \Drupal\Core\Logger\LoggerChannelInterface $logger
    *   Logger.
-   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $dispatcher
-   *   Event dispatcher.
+   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
+   *   The event dispatcher.
    */
   public function __construct(
-    CheckoutOrderManager $checkoutOrderManager,
-    ApiManagerInterface $apiManager,
-    EntityTypeManagerInterface $entityTypeManager,
-    LoggerChannelInterface $logger,
-    EventDispatcherInterface $dispatcher
+    protected CheckoutOrderManager $checkoutOrderManager,
+    protected ApiManagerInterface $apiManager,
+    protected EntityTypeManagerInterface $entityTypeManager,
+    protected LoggerChannelInterface $logger,
+    protected EventDispatcherInterface $eventDispatcher
   ) {
-    $this->checkoutOrderManager = $checkoutOrderManager;
-    $this->apiManager = $apiManager;
-    $this->entityTypeManager = $entityTypeManager;
-    $this->logger = $logger;
-    $this->eventDispatcher = $dispatcher;
   }
 
   /**
@@ -148,23 +107,9 @@ class PushEndpointController implements ContainerInjectionInterface {
 
       $this->eventDispatcher->dispatch(new RequestEvent($commerce_order, $klarna_order), Events::PUSH_ENDPOINT_CALLED);
 
-      // Create a payment if none exist.
-      /** @var \Drupal\commerce_payment\PaymentStorageInterface $commerce_payment_storage */
-      $commerce_payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-      $existing_payments = $commerce_payment_storage->loadByProperties([
-        'payment_gateway' => $commerce_payment_gateway->id(),
-        'order_id' => $commerce_order->id(),
-      ]);
-
-      if (!$existing_payments) {
-        /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $klarna_plugin */
-        $klarna_plugin = $commerce_payment_gateway->getPlugin();
-        $klarna_plugin->getOrCreatePayment($commerce_order)->save();
-        $this->logger->info($this->t('Webhook: created payment for order %id (Klarna id: %klarna_id)', [
-          '%id' => $commerce_order->id(),
-          '%klarna_id' => $klarna_order_id,
-        ]));
-      }
+      /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $klarna_plugin */
+      $klarna_plugin = $commerce_payment_gateway->getPlugin();
+      $klarna_plugin->getOrCreatePayment($commerce_order);
 
       // We acknowledge the order, because if the webhook was fired, the order
       // was maybe not acknowledged on return.
