@@ -14,8 +14,8 @@ jobs:
         core: ['9.5.x']
         # Test php 8.2 only on 10.x core.
         include:
-          - core: 10.0.x
-            php-version: 8.2
+          - php-version: 8.2
+            core: 10.0.x
     container:
       image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
 
@@ -30,7 +30,7 @@ jobs:
         ports:
           - 3306:3306
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 1
 
