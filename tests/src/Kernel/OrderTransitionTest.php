@@ -5,12 +5,13 @@ declare(strict_types = 1);
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
 use Drupal\commerce_klarna_payments\ApiManager;
-use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
+use Drupal\commerce_klarna_payments\PaymentGatewayPluginTrait;
 use Drupal\commerce_order\Entity\Order as OrderEntity;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderType;
 use Drupal\commerce_payment\Entity\PaymentInterface;
+use Drupal\commerce_payment\PaymentStorageInterface;
 use Drupal\commerce_price\Price;
 use GuzzleHttp\Psr7\Response;
 use Klarna\OrderManagement\Model\Capture;
@@ -25,20 +26,14 @@ use Klarna\OrderManagement\Model\Order;
 class OrderTransitionTest extends KlarnaKernelBase {
 
   use ObjectSerializerTrait;
+  use PaymentGatewayPluginTrait;
 
   /**
    * The payment storage.
    *
    * @var \Drupal\commerce_payment\PaymentStorageInterface
    */
-  private $paymentStorage;
-
-  /**
-   * The payment plugin.
-   *
-   * @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   */
-  private $plugin;
+  private ?PaymentStorageInterface $paymentStorage;
 
   /**
    * {@inheritdoc}
@@ -58,20 +53,15 @@ class OrderTransitionTest extends KlarnaKernelBase {
   /**
    * Populates API manager service with mock http client.
    *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
    * @param \Psr\Http\Message\ResponseInterface[] $responses
    *   The responses.
    */
-  private function populateHttpClient(OrderInterface $order, array $responses) : void {
+  private function populateHttpClient(array $responses) : void {
     $apiManager = new ApiManager(
       $this->container->get('event_dispatcher'),
       $this->container->get('commerce_klarna_payments.request_builder'),
       $this->createMockHttpClient($responses)
     );
-
-    $this->plugin = $apiManager->getPlugin($order)
-      ->setApiManager($apiManager);
 
     $this->container->set('commerce_klarna_payments.api_manager', $apiManager);
     $this->refreshServices();
@@ -87,10 +77,10 @@ class OrderTransitionTest extends KlarnaKernelBase {
    */
   private function assertOrder(array $responses, callable $callback) : void {
     $order = $this->createOrder([], ['klarna_order_id' => '123'], new Price('10', 'USD'));
-    $this->populateHttpClient($order, $responses);
+    $this->populateHttpClient($responses);
 
-    // Account for payment made in Klarna::onReturn() callback.
-    $this->plugin->getOrCreatePayment($order);
+    // Manually create the payment made in Klarna::onReturn() callback.
+    $this->getPlugin($order)->getOrCreatePayment($order);
 
     foreach (['place', 'validate', 'fulfill'] as $state) {
       $order = OrderEntity::load($order->id());
@@ -106,7 +96,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
     $order->setRefreshState(OrderInterface::REFRESH_ON_LOAD);
     $order->save();
     $order = $this->reloadEntity($order);
-    $this->assertTrue($order->getTotalPaid()->equals($order->getTotalPrice()));
+    $this->assertTrue($order->isPaid());
     $this->assertEquals('completed', $order->getState()->getId());
   }
 
@@ -165,36 +155,7 @@ class OrderTransitionTest extends KlarnaKernelBase {
   }
 
   /**
-   * Tests that onOrderPlace() syncs two captures made in merchant panel.
-   */
-  public function testOnOrderPlaceSyncRemote() : void {
-    $responses = [
-      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
-      new Response(404),
-      // getOrder inside OrderTransitionSubscriber::onOrderPlace.
-      new Response(200, [], $this->getFixture('get-order-two-captures.json')),
-      // getOrder inside ApiManager::createCapture.
-      new Response(200, [], $this->getFixture('get-order-two-captures.json')),
-      // createCapture inside ApiManager::createCapture.
-      new Response(200),
-      // getOrder inside ApiManager::createCapture.
-      new Response(200, [], $this->getFixture('get-order-two-captures.json')),
-    ];
-
-    $this->assertOrder($responses, function (OrderInterface $order) {
-      $payments = $this->paymentStorage->loadMultipleByOrder($order);
-      $this->assertCount(2, $payments);
-
-      $captures = [
-        '4ba29b50-be7b-44f5-a492-113e6a865e22',
-        'be7b-44f5-a492-113e6a865e22-4ba29b50',
-      ];
-      $this->assertCaptures($payments, $captures);
-    });
-  }
-
-  /**
-   * Tests we can complete orders that are fully captured via merchant panel.
+   * Ensure orders that are fully captured via merchant panel can be completed.
    */
   public function testOnOrderPlaceFullyCaptured() : void {
     $captures = [
@@ -205,12 +166,16 @@ class OrderTransitionTest extends KlarnaKernelBase {
     ];
     /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
+    $orderResponse->setStatus(Order::STATUS_CAPTURED);
     $orderResponse->setCaptures($captures);
+    $orderResponse->setCapturedAmount(1000);
 
     $responses = [
       // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
       new Response(404),
       // getOrder inside OrderTransitionSubscriber::onOrderPlace.
+      new Response(200, [], $this->modelToJson($orderResponse)),
+      // getOrder inside ApiManager::getOrder.
       new Response(200, [], $this->modelToJson($orderResponse)),
     ];
 
@@ -218,123 +183,9 @@ class OrderTransitionTest extends KlarnaKernelBase {
       $payments = $this->paymentStorage->loadMultipleByOrder($order);
       $this->assertCount(1, $payments);
 
-      $captures = [
-        '4ba29b50-be7b-44f5-a492-113e6a865e22',
-      ];
+      $captures = ['4ba29b50-be7b-44f5-a492-113e6a865e22'];
       $this->assertCaptures($payments, $captures);
     });
-  }
-
-  /**
-   * Tests that onOrderPlace() will complete partially captured orders.
-   */
-  public function testOnOrderPlacePartiallyCaptured() : void {
-    $captures = [
-      new Capture([
-        'capture_id' => '4ba29b50-be7b-44f5-a492-113e6a865e22',
-        'captured_amount' => 500,
-      ]),
-    ];
-    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
-    $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
-    $orderResponse->setCaptures($captures);
-
-    $orderResponse2 = clone $orderResponse;
-    $orderResponse2->setCaptures([
-      new Capture([
-        'capture_id' => 'be7b-44f5-a492-113e6a865e22-4ba29b50',
-        'captured_amount' => 500,
-      ]),
-    ] + $captures);
-
-    $responses = [
-      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
-      new Response(404),
-      // getOrder inside OrderTransitionSubscriber::onOrderPlace.
-      new Response(200, [], $this->modelToJson($orderResponse)),
-      // getOrder inside ApiManager::createCapture.
-      new Response(200, [], $this->modelToJson($orderResponse)),
-      // createCapture inside ApiManager::createCapture.
-      new Response(200),
-      // getOrder inside ApiManager::createCapture.
-      new Response(200, [], $this->modelToJson($orderResponse2)),
-    ];
-
-    $this->assertOrder($responses, function (OrderInterface $order) {
-      $payments = $this->paymentStorage->loadMultipleByOrder($order);
-      $this->assertCount(2, $payments);
-
-      $captures = [
-        '4ba29b50-be7b-44f5-a492-113e6a865e22',
-        'be7b-44f5-a492-113e6a865e22-4ba29b50',
-      ];
-      $this->assertCaptures($payments, $captures);
-    });
-  }
-
-  /**
-   * Tests order that is out of sync, but fully captured via merchant panel.
-   *
-   * Out of sync order means that the order has some changes made in
-   * in merchant panel (like different unit price for an item).
-   */
-  public function testOnOrderPlaceOrderNotInSyncCaptured() : void {
-    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
-    $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
-    // Override order total to make order 'out of sync'.
-    $orderResponse->setOrderAmount(UnitConverter::toAmount(new Price('15', 'USD')));
-    // Mark order as captured so we can mark the order as paid in full.
-    $orderResponse->setStatus('CAPTURED');
-
-    $responses = [
-      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
-      new Response(404),
-      new Response(200, [], $this->modelToJson($orderResponse)),
-    ];
-
-    $this->assertOrder($responses, function (OrderInterface $order) {
-      $payments = $this->paymentStorage->loadMultipleByOrder($order);
-      $this->assertCount(1, $payments);
-      $this->assertNull(reset($payments)->getRemoteId());
-    });
-
-  }
-
-  /**
-   * Tests order that is out of sync, but not yet fully captured.
-   */
-  public function testOnOrderPlaceOrderNotInSync() : void {
-    $order = $this->createOrder([], ['klarna_order_id' => '123'], new Price('10', 'USD'));
-
-    // Trying to fulfill out of sync order that is not yet fully captured should
-    // result in PaymentGatewayException, but EntityStorage seems to catch the
-    // exception and throw EntityStorageException instead.
-    $this->expectExceptionMessage(sprintf('Order (%s) is out of sync, but not fully captured yet.', $order->id()));
-
-    /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
-    $orderResponse = $this->jsonToModel($this->getFixture('get-order-no-captures.json'), Order::class);
-    // Override order total to make order 'out of sync'.
-    $orderResponse->setOrderAmount(UnitConverter::toAmount(new Price('15', 'USD')));
-
-    $responses = [
-      // Skip OrderTransitionSubscriber::updateOrderNumberOnPlace().
-      new Response(404),
-      new Response(200, [], $this->modelToJson($orderResponse)),
-    ];
-
-    $this->populateHttpClient($order, $responses);
-
-    // Account for payment made in Klarna::onReturn() callback.
-    $this->plugin->getOrCreatePayment($order);
-
-    $payments = $this->paymentStorage->loadMultipleByOrder($order);
-    $this->assertCount(1, $payments);
-    $this->assertEquals('authorization', reset($payments)->getState()->getId());
-
-    foreach (['place', 'validate', 'fulfill'] as $state) {
-      $order->getState()->applyTransitionById($state);
-      $order->save();
-    }
   }
 
 }

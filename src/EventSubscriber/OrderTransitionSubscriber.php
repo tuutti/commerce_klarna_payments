@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
 use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\Component\Render\FormattableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
@@ -17,7 +18,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 /**
  * Handles order capturing when the order is placed.
  */
-class OrderTransitionSubscriber implements EventSubscriberInterface {
+final class OrderTransitionSubscriber implements EventSubscriberInterface {
 
   /**
    * Constructs a new instance.
@@ -28,8 +29,8 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
    *   The logger.
    */
   public function __construct(
-    protected ApiManager $apiManager,
-    protected LoggerInterface $logger
+    private ApiManager $apiManager,
+    private LoggerInterface $logger
   ) {
   }
 
@@ -65,7 +66,15 @@ class OrderTransitionSubscriber implements EventSubscriberInterface {
       if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
         $payment->getState()
           ->applyTransitionById('capture');
-        $payment->setAmount($order->getTotalPrice())
+
+        $captures = $orderResponse->getCaptures();
+
+        if ($capture = reset($captures)) {
+          $payment->setRemoteId($capture->getCaptureId());
+        }
+        $payment->setAmount(
+          UnitConverter::toPrice($orderResponse->getCapturedAmount(), $orderResponse->getPurchaseCurrency())
+        )
           ->save();
 
         return;

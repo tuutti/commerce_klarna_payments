@@ -5,16 +5,10 @@ declare(strict_types = 1);
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
 use Drupal\commerce_klarna_payments\ApiManager;
-use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Controller\PushEndpointController;
-use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
-use Drupal\commerce_order\Entity\Order as OrderEntity;
 use Drupal\commerce_order\Entity\OrderInterface;
-use Drupal\commerce_order\Entity\OrderType;
-use Drupal\commerce_payment\Entity\PaymentInterface;
-use Drupal\commerce_price\Price;
+use Drupal\commerce_payment\PaymentStorageInterface;
 use GuzzleHttp\Psr7\Response;
-use Klarna\OrderManagement\Model\Capture;
 use Klarna\OrderManagement\Model\Order;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -30,9 +24,9 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
   /**
    * The payment storage.
    *
-   * @var \Drupal\Core\Entity\EntityStorageInterface|mixed|object
+   * @var \Drupal\commerce_payment\PaymentStorageInterface|null
    */
-  protected $paymentStorage;
+  protected ?PaymentStorageInterface $paymentStorage;
 
   /**
    * {@inheritdoc}
@@ -48,7 +42,7 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
   /**
    * Test invalid requests.
    */
-  public function testInvalidRequests() {
+  public function testInvalidRequests() : void {
     /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order.json'), Order::class);
     $order = $this->createOrder([], ['klarna_order_id' => $orderResponse->getOrderId()]);
@@ -101,7 +95,10 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
     }
   }
 
-  public function testValidRequests() {
+  /**
+   * Tests valid requests.
+   */
+  public function testValidRequests() : void {
     /** @var \Klarna\OrderManagement\Model\Order $orderResponse */
     $orderResponse = $this->jsonToModel($this->getFixture('get-order.json'), Order::class);
     $order = $this->createOrder([], ['klarna_order_id' => $orderResponse->getOrderId()]);
@@ -122,11 +119,11 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
     $response = $controller->handleRequest($order, $gateway, $request);
     $this->assertEquals('Ok', $response->getContent());
 
-    /** @var PaymentInterface[] $payments */
+    /** @var \Drupal\commerce_payment\Entity\PaymentInterface[] $payments */
     $payments = $this->paymentStorage->loadByProperties([
       'payment_gateway' => $gateway->id(),
       'order_id' => $order->id(),
-      ]);
+    ]);
     $this->assertNotEmpty($payments);
     $this->assertCount(1, $payments);
     $payment = reset($payments);
@@ -137,7 +134,7 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
    * Create the controller.
    *
    * @return \Drupal\commerce_klarna_payments\Controller\PushEndpointController
-   * @throws \Exception
+   *   The push endpoint controller.
    */
   protected function createController(): PushEndpointController {
     return new PushEndpointController(
@@ -163,9 +160,6 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
       $this->container->get('commerce_klarna_payments.request_builder'),
       $this->createMockHttpClient($responses)
     );
-
-    $this->plugin = $apiManager->getPlugin($order)
-      ->setApiManager($apiManager);
 
     $this->container->set('commerce_klarna_payments.api_manager', $apiManager);
     $this->refreshServices();

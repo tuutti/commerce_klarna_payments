@@ -1,11 +1,11 @@
 <?php
 
-declare(strict_types = 1);
-
 /**
  * @file
  * Contains commerce_klarna_payments.module.
  */
+
+declare(strict_types = 1);
 
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;

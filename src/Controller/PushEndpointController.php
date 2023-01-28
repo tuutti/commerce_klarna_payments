@@ -5,7 +5,8 @@ declare(strict_types = 1);
 namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce_checkout\CheckoutOrderManager;
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_checkout\CheckoutOrderManagerInterface;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -13,7 +14,7 @@ use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Logger\LoggerChannel;
+use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -34,14 +35,14 @@ class PushEndpointController implements ContainerInjectionInterface {
    *
    * @var \Drupal\commerce_checkout\CheckoutOrderManager
    */
-  protected $checkoutOrderManager;
+  protected CheckoutOrderManagerInterface $checkoutOrderManager;
 
   /**
    * The api manager.
    *
    * @var \Drupal\commerce_klarna_payments\ApiManager
    */
-  protected $apiManager;
+  protected ApiManagerInterface $apiManager;
 
   /**
    * Entity type manager.
@@ -53,9 +54,9 @@ class PushEndpointController implements ContainerInjectionInterface {
   /**
    * Logger.
    *
-   * @var \Drupal\Core\Logger\LoggerChannel|\Drupal\Core\Logger\LoggerChannelInterface
+   * @var \Drupal\Core\Logger\LoggerChannelInterface
    */
-  protected $logger;
+  protected LoggerChannelInterface $logger;
 
   /**
    * The event dispatcher.
@@ -69,20 +70,20 @@ class PushEndpointController implements ContainerInjectionInterface {
    *
    * @param \Drupal\commerce_checkout\CheckoutOrderManager $checkoutOrderManager
    *   The checkout order manager.
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The api manager.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   Entity type manager.
-   * @param \Drupal\Core\Logger\LoggerChannel $logger
+   * @param \Drupal\Core\Logger\LoggerChannelInterface $logger
    *   Logger.
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $dispatcher
    *   Event dispatcher.
    */
   public function __construct(
     CheckoutOrderManager $checkoutOrderManager,
-    ApiManager $apiManager,
+    ApiManagerInterface $apiManager,
     EntityTypeManagerInterface $entityTypeManager,
-    LoggerChannel $logger,
+    LoggerChannelInterface $logger,
     EventDispatcherInterface $dispatcher
   ) {
     $this->checkoutOrderManager = $checkoutOrderManager;
@@ -145,7 +146,7 @@ class PushEndpointController implements ContainerInjectionInterface {
         throw new AccessDeniedHttpException('Order is in invalid state.');
       }
 
-      $this->eventDispatcher->dispatch(new RequestEvent(Events::PUSH_ENDPOINT_CALLED, $commerce_order, $klarna_order));
+      $this->eventDispatcher->dispatch(new RequestEvent($commerce_order, $klarna_order), Events::PUSH_ENDPOINT_CALLED);
 
       // Create a payment if none exist.
       /** @var \Drupal\commerce_payment\PaymentStorageInterface $commerce_payment_storage */

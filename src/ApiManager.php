@@ -8,7 +8,6 @@ use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\KlarnaInterface;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
@@ -30,9 +29,10 @@ use Klarna\OrderManagement\Model\RefundObject;
 /**
  * Provides a service to interact with Klarna.
  */
-final class ApiManager {
+final class ApiManager implements ApiManagerInterface {
 
   use ObjectSerializerTrait;
+  use PaymentGatewayPluginTrait;
 
   /**
    * Constructs a new instance.
@@ -52,38 +52,7 @@ final class ApiManager {
   }
 
   /**
-   * Gets the plugin for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna
-   *   The payment plugin.
-   *
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
-   */
-  public function getPlugin(OrderInterface $order) : KlarnaInterface {
-    $gateway = $order->get('payment_gateway');
-
-    if ($gateway->isEmpty()) {
-      throw new NonKlarnaOrderException('Payment gateway not found.');
-    }
-    $plugin = $gateway->first()->entity->getPlugin();
-
-    if (!$plugin instanceof KlarnaInterface) {
-      throw new NonKlarnaOrderException('Payment plugin is not Klarna.');
-    }
-    return $plugin;
-  }
-
-  /**
-   * Gets the Klarna order for given commerce order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\OrderManagement\Model\Order|null
-   *   The klarna order response.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -98,15 +67,7 @@ final class ApiManager {
   }
 
   /**
-   * Creates a capture for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Drupal\commerce_price\Price|null $amount
-   *   The amount.
-   *
-   * @return \Klarna\OrderManagement\Model\Capture
-   *   The capture.
+   * {@inheritdoc}
    *
    * @throws \Klarna\ApiException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -119,7 +80,7 @@ final class ApiManager {
       ->createCaptureRequest($order);
 
     $capture = $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::CAPTURE_CREATE, $order, $capture))
+      ->dispatch(new RequestEvent($order, $capture), Events::CAPTURE_CREATE)
       ->getData();
 
     if (!$capture instanceof Capture) {
@@ -151,15 +112,7 @@ final class ApiManager {
   }
 
   /**
-   * Checks whether Klarna order differs from Drupal order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
-   *   The order response.
-   *
-   * @return bool
-   *   TRUE if orders are in sync.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -175,12 +128,7 @@ final class ApiManager {
   }
 
   /**
-   * Releases the remaining authorizations for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order to release authorizations.
-   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
-   *   The order response.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -191,7 +139,7 @@ final class ApiManager {
     }
     $this->eventDispatcher
       ->dispatch(
-        new RequestEvent(Events::RELEASE_REMAINING_AUTHORIZATION, $order, $orderResponse)
+        new RequestEvent($order, $orderResponse), Events::RELEASE_REMAINING_AUTHORIZATION
       );
     $this
       ->getOrderManagementApi($order)
@@ -199,31 +147,20 @@ final class ApiManager {
   }
 
   /**
-   * Acknowledges the given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
-   *   The order response.
-   *
-   * @throws \Klarna\ApiException
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * {@inheritdoc}
    */
   public function acknowledgeOrder(OrderInterface $order, Order $orderResponse = NULL) : void {
     if (!$orderResponse) {
       $orderResponse = $this->getOrder($order);
     }
     $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::ACKNOWLEDGE_ORDER, $order, $orderResponse));
+      ->dispatch(new RequestEvent($order, $orderResponse), Events::ACKNOWLEDGE_ORDER);
 
     $this->getOrderManagementApi($order)->acknowledgeOrder($orderResponse->getOrderId(), $order->uuid());
   }
 
   /**
-   * Voids payment for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -232,23 +169,14 @@ final class ApiManager {
     $orderResponse = $this->getOrder($order);
 
     $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::VOID_PAYMENT, $order, $orderResponse));
+      ->dispatch(new RequestEvent($order, $orderResponse), Events::VOID_PAYMENT);
 
     $this->getOrderManagementApi($order)
       ->cancelOrder($orderResponse->getOrderId());
   }
 
   /**
-   * Refund payment for given order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Drupal\commerce_price\Price $amount
-   *   The order.
-   * @param string $klarna_idempotency_key
-   *   The key to guarantee the idempotency of the operation. The key
-   *   should be unique. Retries of requests are safe to be applied in case
-   *   of errors.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -259,22 +187,14 @@ final class ApiManager {
       'refunded_amount' => UnitConverter::toAmount($amount),
     ]);
     $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::REFUND_CREATE, $order, $orderResponse));
+      ->dispatch(new RequestEvent($order, $orderResponse), Events::REFUND_CREATE);
 
     $this->getRefundsApi($order)
       ->refundOrder($orderResponse->getOrderId(), $klarna_idempotency_key, $body);
   }
 
   /**
-   * Authorizes the order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param string $token
-   *   The authorization token.
-   *
-   * @return \Klarna\Payments\Model\Order
-   *   The authorization response.
+   * {@inheritdoc}
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
@@ -285,7 +205,7 @@ final class ApiManager {
       ->createSessionRequest($order);
 
     $createOrderRequest = $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::ORDER_CREATE, $order, $session))
+      ->dispatch(new RequestEvent($order, $session), Events::ORDER_CREATE)
       ->getData();
 
     if ($createOrderRequest instanceof Session) {
@@ -304,12 +224,7 @@ final class ApiManager {
   }
 
   /**
-   * Handles to notification event.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param string $fraudStatus
-   *   The fraud status.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    * @throws \Klarna\ApiException
@@ -329,17 +244,11 @@ final class ApiManager {
     }
 
     $this->eventDispatcher
-      ->dispatch(new RequestEvent($statusMap[$fraudStatus], $order, $orderResponse));
+      ->dispatch(new RequestEvent($order, $orderResponse), $statusMap[$fraudStatus]);
   }
 
   /**
-   * Gets the sessions request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\Payments\Api\SessionsApi
-   *   The Sessions api request.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
@@ -348,13 +257,7 @@ final class ApiManager {
   }
 
   /**
-   * Gets the captures api request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\OrderManagement\Api\CapturesApi
-   *   The captures api request.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
@@ -363,13 +266,7 @@ final class ApiManager {
   }
 
   /**
-   * Gets the payment orders api request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\Payments\Api\OrdersApi
-   *   The payment order api request.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
@@ -378,13 +275,7 @@ final class ApiManager {
   }
 
   /**
-   * Gets the order management orders api request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\OrderManagement\Api\OrdersApi
-   *   The orders api request.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
@@ -393,13 +284,7 @@ final class ApiManager {
   }
 
   /**
-   * Gets the refund api request.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\OrderManagement\Api\RefundsApi
-   *   The refunds api request.
+   * {@inheritdoc}
    *
    * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
    */
@@ -408,13 +293,7 @@ final class ApiManager {
   }
 
   /**
-   * Builds a new order transaction.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   *
-   * @return \Klarna\Payments\Model\Session
-   *   The session response.
+   * {@inheritdoc}
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
    * @throws \Klarna\ApiException
@@ -425,7 +304,7 @@ final class ApiManager {
       ->createSessionRequest($order);
 
     $session = $this->eventDispatcher
-      ->dispatch(new RequestEvent(Events::SESSION_CREATE, $order, $session))
+      ->dispatch(new RequestEvent($order, $session), Events::SESSION_CREATE)
       ->getData();
 
     if (!$session instanceof Session) {

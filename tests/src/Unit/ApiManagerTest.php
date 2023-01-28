@@ -7,26 +7,20 @@ namespace Drupal\Tests\commerce_klarna_payments\Unit;
 use Drupal\commerce_klarna_payments\ApiManager;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
-use Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\KlarnaInterface;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
-use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
-use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\PaymentGatewayInterface as PaymentGatewayPluginInterface;
 use Drupal\commerce_price\Price;
-use Drupal\Core\Field\FieldItemInterface;
-use Drupal\Core\Field\FieldItemListInterface;
 use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
-use Klarna\Configuration;
 use Klarna\OrderManagement\Model\Capture;
 use Klarna\Model\ModelInterface;
 use Klarna\OrderManagement\Model\Order;
 use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
 use Prophecy\Argument;
-use Prophecy\Prophecy\ObjectProphecy;
 use Prophecy\Prophecy\ProphecyInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
@@ -36,7 +30,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * @group commerce_klarna_payments
  * @coversDefaultClass \Drupal\commerce_klarna_payments\ApiManager
  */
-class ApiManagerTest extends FixtureUnitTestBase {
+class ApiManagerTest extends UnitTestBase {
 
   /**
    * Creates HTTP client stub.
@@ -61,13 +55,13 @@ class ApiManagerTest extends FixtureUnitTestBase {
    *   The order.
    * @param \Klarna\Model\ModelInterface|null $model
    *   The model.
-   * @param \GuzzleHttp\Client|null $client
+   * @param \GuzzleHttp\ClientInterface|null $client
    *   The client.
    *
    * @return \Drupal\commerce_klarna_payments\ApiManager
    *   The api manager instance.
    */
-  private function createSut(OrderInterface $order, ModelInterface $model = NULL, Client $client = NULL) : ApiManager {
+  private function createSut(OrderInterface $order, ModelInterface $model = NULL, ClientInterface $client = NULL) : ApiManager {
     $requestBuilder = $this->prophesize(RequestBuilder::class);
 
     if ($model instanceof Session) {
@@ -76,31 +70,14 @@ class ApiManagerTest extends FixtureUnitTestBase {
     if ($model instanceof Capture) {
       $requestBuilder->createCaptureRequest($order)->willReturn($model);
     }
+    if (!$client) {
+      $client = $this->prophesize(ClientInterface::class)->reveal();
+    }
     $eventDispatcher = $this->prophesize(EventDispatcherInterface::class);
     $eventDispatcher->dispatch(Argument::any(), Argument::any())
       ->willReturn(new RequestEvent($order, $model));
 
     return new ApiManager($eventDispatcher->reveal(), $requestBuilder->reveal(), $client);
-  }
-
-  /**
-   * Populates working plugin to the given order.
-   *
-   * @param \Prophecy\Prophecy\ObjectProphecy $order
-   *   The order to populate the stub to.
-   */
-  private function populateOrderPluginStub(ObjectProphecy $order) : void {
-    $plugin = $this->prophesize(KlarnaInterface::class);
-    $plugin->getClientConfiguration()->willReturn(new Configuration());
-
-    $gateway = $this->prophesize(PaymentGatewayInterface::class);
-    $gateway->getPlugin()->willReturn($plugin->reveal());
-
-    $list = $this->prophesize(FieldItemListInterface::class);
-    $list->isEmpty()->willReturn(FALSE);
-    $list->first()->willReturn((object) ['entity' => $gateway->reveal()]);
-
-    $order->get('payment_gateway')->willReturn($list->reveal());
   }
 
   /**
@@ -118,62 +95,6 @@ class ApiManagerTest extends FixtureUnitTestBase {
       ->shouldBeCalled()
       ->willReturn($returnValue);
     return $order;
-  }
-
-  /**
-   * Tests getPlugin() when gateway is not set.
-   *
-   * @covers ::getPlugin
-   */
-  public function testGetPluginGatewayNotFound() {
-    $this->expectException(\InvalidArgumentException::class);
-
-    $list = $this->prophesize(FieldItemInterface::class);
-    $list->isEmpty()->willReturn(TRUE);
-
-    $order = $this->prophesize(OrderInterface::class);
-    $order->get('payment_gateway')->willReturn($list->reveal());
-
-    $sut = $this->createSut($order->reveal());
-    $sut->getPlugin($order->reveal());
-  }
-
-  /**
-   * Tests getPlugin() for non-klarna orders.
-   *
-   * @covers ::getPlugin
-   */
-  public function testGetPluginNonKlarnaOrder() {
-    $this->expectException(NonKlarnaOrderException::class);
-
-    $plugin = $this->prophesize(PaymentGatewayPluginInterface::class);
-    $gateway = $this->prophesize(PaymentGatewayInterface::class);
-    $gateway->getPlugin()->willReturn($plugin->reveal());
-
-    $list = $this->prophesize(FieldItemListInterface::class);
-    $list->isEmpty()->willReturn(FALSE);
-    $list->first()->willReturn((object) ['entity' => $gateway->reveal()]);
-
-    $order = $this->prophesize(OrderInterface::class);
-    $order->get('payment_gateway')->willReturn($list->reveal());
-
-    $sut = $this->createSut($order->reveal());
-    $sut->getPlugin($order->reveal());
-  }
-
-  /**
-   * Tests getPlugin() with valid data.
-   *
-   * @covers ::getPlugin
-   */
-  public function testGetPlugin() : void {
-    $order = $this->prophesize(OrderInterface::class);
-    $this->populateOrderPluginStub($order);
-
-    $sut = $this->createSut($order->reveal());
-    $plugin = $sut->getPlugin($order->reveal());
-
-    $this->assertInstanceOf(KlarnaInterface::class, $plugin);
   }
 
   /**
@@ -195,7 +116,11 @@ class ApiManagerTest extends FixtureUnitTestBase {
     $eventDispatcher->dispatch(Argument::any(), Argument::any())
       ->willReturn(new RequestEvent($order, new Order()));
 
-    $sut = new ApiManager($eventDispatcher->reveal(), $requestBuilder->reveal());
+    $sut = new ApiManager(
+      $eventDispatcher->reveal(),
+      $requestBuilder->reveal(),
+      $this->prophesize(ClientInterface::class)->reveal(),
+    );
     $sut->sessionRequest($order);
   }
 
@@ -366,7 +291,6 @@ class ApiManagerTest extends FixtureUnitTestBase {
    */
   public function testAcknowledgeOrder() : void {
     $order = $this->createOrderStub('123');
-
     $this->populateOrderPluginStub($order);
 
     $client = $this->createHttpClient([

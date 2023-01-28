@@ -9,7 +9,7 @@ services:
 
   commerce_klarna_payments.api_manager:
     class: Drupal\commerce_klarna_payments\ApiManager
-    arguments: ['@event_dispatcher', '@commerce_klarna_payments.request_builder']
+    arguments: ['@event_dispatcher', '@commerce_klarna_payments.request_builder', '@http_client']
 
   commerce_klarna_payments.order_transition:
     class: Drupal\commerce_klarna_payments\EventSubscriber\OrderTransitionSubscriber

@@ -6,7 +6,7 @@ namespace Drupal\commerce_klarna_payments\Controller;
 
 use Drupal\commerce\Response\NeedsRedirectException;
 use Drupal\commerce_checkout\CheckoutOrderManager;
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Component\Utility\NestedArray;
@@ -35,7 +35,7 @@ class RedirectController implements ContainerInjectionInterface {
    *   The checkout order manager.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    *   The messenger.
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The logger.
    * @param \Psr\Log\LoggerInterface $logger
    *   The api manager.
@@ -43,7 +43,7 @@ class RedirectController implements ContainerInjectionInterface {
   public function __construct(
     protected CheckoutOrderManager $checkoutOrderManager,
     protected MessengerInterface $messenger,
-    protected ApiManager $apiManager,
+    protected ApiManagerInterface $apiManager,
     protected LoggerInterface $logger
   ) {
   }

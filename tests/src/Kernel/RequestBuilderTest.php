@@ -4,16 +4,12 @@ declare(strict_types = 1);
 
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
+use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Adjustment;
 use Drupal\commerce_order\Entity\OrderInterface;
-use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\commerce_price\Price;
-use Drupal\commerce_product\Entity\ProductVariationInterface;
-use Drupal\commerce_shipping\Entity\ShipmentInterface;
 use Drupal\commerce_tax\Entity\TaxType;
-use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\profile\Entity\Profile;
-use Prophecy\Prophecy\ObjectProphecy;
 
 /**
  * Request builder tests.
@@ -28,7 +24,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
    *
    * @var \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
    */
-  protected $sut;
+  protected ?RequestBuilder $sut;
 
   /**
    * {@inheritdoc}
@@ -36,7 +32,6 @@ class RequestBuilderTest extends KlarnaKernelBase {
   protected static $modules = [
     'address',
     'commerce_tax',
-    'commerce_shipping',
     'commerce_promotion',
   ];
 
@@ -80,6 +75,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
+        'push' => 'http://localhost/commerce_klarna_payments/1/klarna_payments/push?step=payment&klarna_order_id={order.id}',
       ],
       'order_amount' => 1100,
       'order_lines' => [
@@ -115,6 +111,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
+        'push' => 'http://localhost/commerce_klarna_payments/1/klarna_payments/push?step=payment&klarna_order_id={order.id}',
       ],
       'order_amount' => 1100,
       'order_lines' => [
@@ -151,6 +148,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
       'merchant_urls' => (object) [
         'confirmation' => 'http://localhost/checkout/1/payment/return?commerce_payment_gateway=klarna_payments',
         'notification' => 'http://localhost/payment/notify/klarna_payments?step=payment&commerce_order=1',
+        'push' => 'http://localhost/commerce_klarna_payments/1/klarna_payments/push?step=payment&klarna_order_id={order.id}',
       ],
       'order_amount' => 1364,
       'order_lines' => [
@@ -249,130 +247,6 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $request = $this->sut->createSessionRequest($order);
 
     $this->assertEquals($expected, $this->modelToArray($request->getBillingAddress()));
-  }
-
-  /**
-   * Creates object mock to test shipments.
-   *
-   * @param array $adjustments
-   *   The adjustments.
-   *
-   * @return \Prophecy\Prophecy\ObjectProphecy
-   *   The mock.
-   */
-  private function createOrderMock(array $adjustments = []) : ObjectProphecy {
-    $shipments = $this->prophesize(ShipmentInterface::class);
-    $shipments->getAmount()
-      ->willReturn(new Price('9', 'EUR'));
-    $shipments->getAdjustments(['tax'])
-      ->willReturn($adjustments);
-
-    $shipmentsList = $this->prophesize(EntityReferenceFieldItemListInterface::class);
-    $shipmentsList->isEmpty()
-      ->willReturn(FALSE);
-    $shipmentsList->referencedEntities()
-      ->willReturn([$shipments->reveal()]);
-
-    $purchasedEntity = $this->prophesize(ProductVariationInterface::class);
-    $purchasedEntity->getEntityTypeId()
-      ->willReturn('commerce_product_variation');
-    $purchasedEntity->id()
-      ->willReturn('1');
-
-    $orderItem = $this->prophesize(OrderItemInterface::class);
-    $orderItem->getPurchasedEntity()
-      ->willReturn($purchasedEntity);
-    $orderItem->getTitle()
-      ->willReturn('Title');
-    $orderItem->getQuantity()
-      ->willReturn(1);
-    $orderItem->getAdjustedUnitPrice()
-      ->willReturn(new Price('11', 'EUR'));
-    $orderItem->getAdjustedTotalPrice()
-      ->willReturn(new Price('11', 'EUR'));
-    $orderItem->getAdjustments(['tax'])
-      ->willReturn([]);
-
-    $order = $this->prophesize(OrderInterface::class);
-    $order->payment_gateway = (object) ['entity' => $this->gateway];
-    $order->id()->willReturn('1');
-    $order->getStore()->willReturn($this->store);
-    $order->getTotalPrice()->willReturn(new Price('11', 'EUR'));
-    $order->collectProfiles()->willReturn([]);
-    $order->getItems()->willReturn([$orderItem->reveal()]);
-    $order->hasField('shipments')->willReturn(TRUE);
-    $order->get('shipments')->willReturn($shipmentsList->reveal());
-
-    return $order;
-  }
-
-  /**
-   * Make sure we can collect shipping payments with taxes.
-   *
-   * @covers ::createSessionRequest
-   */
-  public function testShipmentTaxes() : void {
-    $order_lines = [
-      [
-        'name' => 'Title',
-        'quantity' => 1,
-        'unit_price' => 1100,
-        'total_amount' => 1100,
-        'reference' => 'commerce_product_variation:1',
-      ],
-      [
-        'name' => 'Shipping',
-        'quantity' => 1,
-        'unit_price' => 900,
-        'total_amount' => 900,
-        'type' => 'shipping_fee',
-        'tax_rate' => 2400,
-        'total_tax_amount' => 171,
-      ],
-    ];
-
-    $order = $this->createOrderMock([
-      new Adjustment([
-        'type' => 'tax',
-        'label' => 'Tax',
-        'amount' => new Price('1.71', 'EUR'),
-        'percentage' => '0.24',
-      ]),
-    ]);
-    $request = $this->sut->createSessionRequest($order->reveal());
-    $this->assertEquals($order_lines, iterator_to_array($this->modelsToArray($request->getOrderLines())));
-    $this->assertEquals(171, $request->getOrderTaxAmount());
-    $this->assertEquals(1100, $request->getOrderAmount());
-  }
-
-  /**
-   * Make sure we can collect shipping payments.
-   *
-   * @covers ::createSessionRequest
-   */
-  public function testShipmentNoTaxes() : void {
-    $order_lines = [
-      [
-        'name' => 'Title',
-        'quantity' => 1,
-        'unit_price' => 1100,
-        'total_amount' => 1100,
-        'reference' => 'commerce_product_variation:1',
-      ],
-      [
-        'name' => 'Shipping',
-        'quantity' => 1,
-        'unit_price' => 900,
-        'total_amount' => 900,
-        'type' => 'shipping_fee',
-      ],
-    ];
-    $order = $this->createOrderMock();
-    $request = $this->sut->createSessionRequest($order->reveal());
-
-    $this->assertEquals($order_lines, iterator_to_array($this->modelsToArray($request->getOrderLines())));
-    $this->assertEquals(0, $request->getOrderTaxAmount());
-    $this->assertEquals(1100, $request->getOrderAmount());
   }
 
   /**

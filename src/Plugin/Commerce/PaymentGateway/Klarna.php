@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\Order;
@@ -46,9 +46,9 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
   /**
    * The klarna api manager.
    *
-   * @var \Drupal\commerce_klarna_payments\ApiManager
+   * @var \Drupal\commerce_klarna_payments\ApiManagerInterface
    */
-  private ApiManager $apiManager;
+  private ApiManagerInterface $apiManager;
 
   /**
    * The logger.
@@ -163,10 +163,8 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
     $configuration = (new Configuration())
       ->setUsername($this->getUsername())
       ->setPassword($this->getPassword())
-      ->setUserAgent('Library drupal-klarna-payments-v1');
-
-    $host = $this->getHost();
-    $configuration->setHost($host);
+      ->setUserAgent('Library drupal-klarna-payments-v1')
+      ->setHost($this->getHost());
 
     return $configuration;
   }

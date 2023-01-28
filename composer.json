@@ -16,5 +16,9 @@
         "tuutti/php-klarna-ordermanagement": "^1.0 || ^2.0",
         "webmozart/assert": "*",
         "drupal/commerce": "^2"
+    },
+    "require-dev": {
+        "drupal/commerce_shipping": "^2.0"
     }
+
 }

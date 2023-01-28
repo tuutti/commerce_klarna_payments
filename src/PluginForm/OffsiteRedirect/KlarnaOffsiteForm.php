@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect;
 
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\ObjectSerializerTrait;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
@@ -36,14 +36,18 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   /**
    * Constructs a new instance.
    *
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The api manager.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    *   The messenger.
    */
-  public function __construct(private ApiManager $apiManager, private LoggerInterface $logger, private MessengerInterface $messenger) {
+  public function __construct(
+    private ApiManagerInterface $apiManager,
+    private LoggerInterface $logger,
+    private MessengerInterface $messenger
+  ) {
   }
 
   /**

@@ -16,6 +16,7 @@ use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Tests\UnitTestCase;
 use Prophecy\Argument;
+use Prophecy\PhpUnit\ProphecyTrait;
 use Prophecy\Prophecy\ObjectProphecy;
 
 /**
@@ -25,6 +26,8 @@ use Prophecy\Prophecy\ObjectProphecy;
  * @coversDefaultClass \Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder
  */
 class RequestBuilderTest extends UnitTestCase {
+
+  use ProphecyTrait;
 
   /**
    * Creates an order mock object.
