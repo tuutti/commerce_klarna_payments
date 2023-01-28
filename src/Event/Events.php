@@ -59,4 +59,9 @@ final class Events {
    */
   public const REFUND_CREATE = 'commerce_klarna_payments.refund_create';
 
+  /**
+   * This event is run when the push endpoint gets called.
+   */
+  public const PUSH_ENDPOINT_CALLED = 'commerce_klarna_payments.push_endpoint_called';
+
 }

@@ -11,3 +11,11 @@ commerce_klarna_payments.redirect:
         type: entity:commerce_order
       commerce_payment_gateway:
         type: entity:commerce_payment_gateway
+commerce_klarna_payments.push:
+  path: '/commerce_klarna_payments/{commerce_order}/{commerce_payment_gateway}/push'
+  defaults:
+    _controller: '\Drupal\commerce_klarna_payments\Controller\PushEndpointController::handleRequest'
+    methods: [ POST ]
+  requirements:
+    _access: 'TRUE'
+    _module_dependencies: commerce_checkout

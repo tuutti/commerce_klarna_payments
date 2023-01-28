@@ -11,6 +11,7 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Url;
 use Klarna\OrderManagement\Model\Capture;
 use Klarna\Payments\Model\MerchantUrls;
 use Klarna\Payments\Model\Options;
@@ -81,15 +82,25 @@ class RequestBuilder {
       $session->setPurchaseCountry($storeAddress->getCountryCode());
     }
 
+    $push_url =  Url::fromRoute('commerce_klarna_payments.push')
+      ->setRouteParameter('commerce_order', $order->id())
+      ->setRouteParameter('commerce_payment_gateway', $plugin->getEntityId())
+      ->setAbsolute()
+      ->toString();
+
+    $merchantUrls = [
+      'confirmation' => $plugin->getReturnUri($order, 'commerce_payment.checkout.return'),
+      'notification' => $plugin->getReturnUri($order, 'commerce_payment.notify', [
+        'step' => 'complete',
+      ]),
+      // We need to concatenate this, otherwise the curly braces get escaped.
+      'push' =>  $push_url . '?klarna_order_id={order.id}',
+    ];
+
     $session
       ->setPurchaseCurrency($order->getTotalPrice()->getCurrencyCode())
       ->setOrderAmount(UnitConverter::toAmount($order->getTotalPrice()))
-      ->setMerchantUrls(new MerchantUrls([
-        'confirmation' => $plugin->getReturnUri($order, 'commerce_payment.checkout.return'),
-        'notification' => $plugin->getReturnUri($order, 'commerce_payment.notify', [
-          'step' => 'complete',
-        ]),
-      ]));
+      ->setMerchantUrls(new MerchantUrls($merchantUrls));
 
     if ($options = $this->getOptions($plugin)) {
       $session->setOptions(new Options($options));

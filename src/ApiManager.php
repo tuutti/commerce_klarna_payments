@@ -216,8 +216,7 @@ final class ApiManager {
     $this->eventDispatcher
       ->dispatch(new RequestEvent(Events::ACKNOWLEDGE_ORDER, $order, $orderResponse));
 
-    $this->getOrderManagementApi($order)
-      ->acknowledgeOrder($orderResponse->getOrderId());
+    $this->getOrderManagementApi($order)->acknowledgeOrder($orderResponse->getOrderId(), $order->uuid());
   }
 
   /**
