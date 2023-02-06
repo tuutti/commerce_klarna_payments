@@ -9,6 +9,7 @@ use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\OptionsHelper;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_order\Entity\OrderItemInterface;
+use Drupal\commerce_product\Entity\ProductVariationInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\OrderManagement\Model\Capture;
@@ -74,11 +75,11 @@ class RequestBuilder {
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */
     $plugin = $order->payment_gateway->entity->getPlugin();
 
-    $session = new Session();
+    $request = new Session();
 
     // Default purchase country to store country.
     if ($storeAddress = $order->getStore()->getAddress()) {
-      $session->setPurchaseCountry($storeAddress->getCountryCode());
+      $request->setPurchaseCountry($storeAddress->getCountryCode());
     }
 
     $merchantUrls = [
@@ -90,30 +91,30 @@ class RequestBuilder {
       'push' => $plugin->getReturnUri($order, 'commerce_klarna_payments.push') . '&klarna_order_id={order.id}',
     ];
 
-    $session
+    $request
       ->setPurchaseCurrency($order->getTotalPrice()->getCurrencyCode())
       ->setOrderAmount(UnitConverter::toAmount($order->getTotalPrice()))
       ->setMerchantUrls(new MerchantUrls($merchantUrls));
 
     if ($options = $this->getOptions($plugin)) {
-      $session->setOptions(new Options($options));
+      $request->setOptions(new Options($options));
     }
 
     if ($billingAddress = $this->getAddress($order, 'billing')) {
-      $session->setBillingAddress($billingAddress);
+      $request->setBillingAddress($billingAddress);
 
       // Override purchase country from billing address.
       if ($billingAddress->getCountry()) {
-        $session->setPurchaseCountry($billingAddress->getCountry());
+        $request->setPurchaseCountry($billingAddress->getCountry());
       }
     }
 
     if ($shippingAddress = $this->getAddress($order, 'shipping')) {
-      $session->setShippingAddress($shippingAddress);
+      $request->setShippingAddress($shippingAddress);
     }
 
-    if ($purchaseCountry = $session->getPurchaseCountry()) {
-      $session->setLocale($this->getLocale($purchaseCountry));
+    if ($purchaseCountry = $request->getPurchaseCountry()) {
+      $request->setLocale($this->getLocale($purchaseCountry));
     }
 
     $totalTax   = 0;
@@ -158,10 +159,24 @@ class RequestBuilder {
       }
     }
 
-    $session->setOrderTaxAmount($totalTax)
+    // Add order discounts as negative amount order lines.
+    foreach ($order->getAdjustments() as $adjustment) {
+      if ($adjustment->getAmount()->isPositive()) {
+        continue;
+      }
+      $amount = UnitConverter::toAmount($adjustment->getAmount());
+
+      $orderLines[] = (new OrderLine())
+        ->setName((string) new TranslatableMarkup('Discount'))
+        ->setQuantity(1)
+        ->setTotalAmount($amount)
+        ->setUnitPrice($amount);
+    }
+
+    $request->setOrderTaxAmount($totalTax)
       ->setOrderLines($orderLines);
 
-    return $session;
+    return $request;
   }
 
   /**
@@ -183,7 +198,12 @@ class RequestBuilder {
     if ($purchasedEntity = $item->getPurchasedEntity()) {
       // Use purchased entity type + id as reference. For example:
       // commerce_product_variation:1.
-      $orderItem->setReference(sprintf('%s:%s', $purchasedEntity->getEntityTypeId(), $purchasedEntity->id()));
+      $reference = sprintf('%s:%s', $purchasedEntity->getEntityTypeId(), $purchasedEntity->id());
+
+      if ($purchasedEntity instanceof ProductVariationInterface) {
+        $reference = $purchasedEntity->getSku();
+      }
+      $orderItem->setReference($reference);
     }
 
     foreach ($item->getAdjustments(['tax']) as $adjustment) {

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types = 1);
+
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
 use Drupal\commerce_klarna_payments\ObjectSerializerTrait;

@@ -57,32 +57,32 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
 
     try {
       $plugin = $this->apiManager->getPlugin($order);
+    }
+    catch (NonKlarnaOrderException) {
+    }
 
-      $orderResponse = $this->apiManager->getOrder($order);
-      $payment = $plugin->getOrCreatePayment($order);
+    $orderResponse = $this->apiManager->getOrder($order);
+    $payment = $plugin->getOrCreatePayment($order);
 
-      // Mark local payment as captured if the Klarna order is captured before
-      // ::capturePayment() is called.
-      if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
-        $payment->getState()
-          ->applyTransitionById('capture');
+    // Mark local payment as captured if the Klarna order is captured before
+    // ::capturePayment() is called.
+    if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
+      $payment->getState()
+        ->applyTransitionById('capture');
 
-        $captures = $orderResponse->getCaptures();
+      $captures = $orderResponse->getCaptures();
 
-        if ($capture = reset($captures)) {
-          $payment->setRemoteId($capture->getCaptureId());
-        }
-        $payment->setAmount(
-          UnitConverter::toPrice($orderResponse->getCapturedAmount(), $orderResponse->getPurchaseCurrency())
-        )
-          ->save();
-
-        return;
+      if ($capture = reset($captures)) {
+        $payment->setRemoteId($capture->getCaptureId());
       }
-      $plugin->capturePayment($payment, $order->getBalance());
+      $payment->setAmount(
+        UnitConverter::toPrice($orderResponse->getCapturedAmount(), $orderResponse->getPurchaseCurrency())
+      )
+        ->save();
+
+      return;
     }
-    catch (NonKlarnaOrderException | ApiException) {
-    }
+    $plugin->capturePayment($payment, $order->getBalance());
   }
 
   /**

@@ -10,6 +10,7 @@ use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
 use Drupal\commerce_tax\Entity\TaxType;
 use Drupal\profile\Entity\Profile;
+use Klarna\Payments\Model\OrderLine;
 
 /**
  * Request builder tests.
@@ -266,6 +267,12 @@ class RequestBuilderTest extends KlarnaKernelBase {
     $order->save();
 
     $request = $this->sut->createSessionRequest($order);
+
+    // Make sure there is discounts are added as negative order lines.
+    $discounts = array_filter($request->getOrderLines(), function (OrderLine $item) {
+      return $item->getName() === 'Discount';
+    });
+    $this->assertCount(1, $discounts);
     $this->assertEquals(990, $request->getOrderAmount());
   }
 
