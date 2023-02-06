@@ -55,6 +55,7 @@ class RequestBuilderTest extends UnitTestCase {
     $order->collectProfiles()->willReturn([]);
     $order->getItems()->willReturn([$orderItem->reveal()]);
     $order->hasField('shipments')->willReturn(FALSE);
+    $order->getAdjustments()->willReturn([]);
 
     $paymentGateway = $this->prophesize(PaymentGatewayInterface::class);
     $klarnaPlugin = $this->prophesize(KlarnaInterface::class);
