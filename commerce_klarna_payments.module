@@ -10,7 +10,6 @@ declare(strict_types = 1);
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Klarna\OrderManagement\Model\Order;
 
 /**
  * Implements hook_theme().
@@ -46,12 +45,8 @@ function commerce_klarna_payments_form_alter(&$form, FormStateInterface $form_st
   try {
     $orderResponse = $service->getOrder($order);
   }
-  catch (NonKlarnaOrderException $e) {
+  catch (NonKlarnaOrderException) {
     return;
-  }
-
-  if (!$service->orderIsInSync($order, $orderResponse) && $orderResponse->getStatus() !== Order::STATUS_CAPTURED) {
-    Drupal::messenger()->addError(t('Order is out of sync with Klarna order. Use Klarna merchant panel to  make any further changes and capture the order before fulfilling the order here.'));
   }
 
   if ($orderResponse->getFraudStatus() === 'PENDING') {

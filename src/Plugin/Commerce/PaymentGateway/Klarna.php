@@ -202,7 +202,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
       '#title' => $this->t('Cancel fraudulent orders automatically (US & UK only)'),
       '#type' => 'checkbox',
       '#default_value' => $this->configuration['cancel_fraudulent_orders'],
-      '#description' => $this->t('Automatically cancel the Drupal order if Klarna deems the order fraudulent. <a href="@link">Read more.</a>', ['@link' => 'https://developers.klarna.com/documentation/order-management/pending-orders/#overriding-the-fraud-decision']),
+      '#description' => $this->t('Automatically cancel the Drupal order if Klarna deems the order fraudulent. <a href="@link">Read more.</a>', ['@link' => 'https://docs.klarna.com/order-management/pending-orders/#overriding-the-fraud-decision']),
     ];
 
     $form['options'] = [

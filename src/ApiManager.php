@@ -53,9 +53,6 @@ final class ApiManager implements ApiManagerInterface {
 
   /**
    * {@inheritdoc}
-   *
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
-   * @throws \Klarna\ApiException
    */
   public function getOrder(OrderInterface $order) : ? Order {
     if (!$orderId = $order->getData('klarna_order_id')) {
@@ -95,8 +92,8 @@ final class ApiManager implements ApiManagerInterface {
       ->captureOrder($orderResponse->getOrderId(), $capture);
 
     $orderResponse = $this->getOrder($order);
-    // Create capture request doesn't return the capture it made.
-    // We should not have any recaptures before this, but re-fetch the order and
+    // Create capture request doesn't return the capture object it made.
+    // We should not have any captures before this, but re-fetch the order and
     // compare captures to previously fetched captures just to be sure.
     $newCaptures = array_filter($orderResponse->getCaptures(), function (Capture $newCapture) use ($currentCaptures) {
       foreach ($currentCaptures as $oldCapture) {
@@ -108,23 +105,11 @@ final class ApiManager implements ApiManagerInterface {
       return TRUE;
     });
 
-    return reset($newCaptures);
-  }
-
-  /**
-   * {@inheritdoc}
-   *
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
-   * @throws \Klarna\ApiException
-   */
-  public function orderIsInSync(OrderInterface $order, Order $orderResponse = NULL) : bool {
-    if (!$orderResponse) {
-      $orderResponse = $this->getOrder($order);
+    if (count($newCaptures) < 1) {
+      throw new \InvalidArgumentException('Failed to fetch any captures.');
     }
 
-    return UnitConverter::toPrice($orderResponse->getOrderAmount(), $order->getTotalPrice()->getCurrencyCode())
-      ->equals($order->getTotalPrice());
-
+    return reset($newCaptures);
   }
 
   /**

@@ -29,6 +29,9 @@ interface ApiManagerInterface {
    *
    * @return \Klarna\OrderManagement\Model\Order|null
    *   The klarna order response.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function getOrder(OrderInterface $order) : ? Order;
 
@@ -44,19 +47,6 @@ interface ApiManagerInterface {
    *   The capture.
    */
   public function createCapture(OrderInterface $order, Price $amount = NULL) : Capture;
-
-  /**
-   * Checks whether Klarna order differs from Drupal order.
-   *
-   * @param \Drupal\commerce_order\Entity\OrderInterface $order
-   *   The order.
-   * @param \Klarna\OrderManagement\Model\Order|null $orderResponse
-   *   The order response.
-   *
-   * @return bool
-   *   TRUE if orders are in sync.
-   */
-  public function orderIsInSync(OrderInterface $order, Order $orderResponse = NULL) : bool;
 
   /**
    * Releases the remaining authorizations for given order.

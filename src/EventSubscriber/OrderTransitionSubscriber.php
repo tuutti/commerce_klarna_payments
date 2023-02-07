@@ -4,9 +4,10 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
+use Drupal\commerce_klarna_payments\PaymentGatewayPluginTrait;
 use Drupal\Component\Render\FormattableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
@@ -20,16 +21,18 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  */
 final class OrderTransitionSubscriber implements EventSubscriberInterface {
 
+  use PaymentGatewayPluginTrait;
+
   /**
    * Constructs a new instance.
    *
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The Klarna connector.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
    */
   public function __construct(
-    private ApiManager $apiManager,
+    private ApiManagerInterface $apiManager,
     private LoggerInterface $logger
   ) {
   }
@@ -56,33 +59,33 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      $plugin = $this->apiManager->getPlugin($order);
+      $plugin = $this->getPlugin($order);
+    }
+    catch (NonKlarnaOrderException) {
+      return;
+    }
+    $orderResponse = $this->apiManager->getOrder($order);
+    $payment = $plugin->getOrCreatePayment($order);
 
-      $orderResponse = $this->apiManager->getOrder($order);
-      $payment = $plugin->getOrCreatePayment($order);
+    // Mark local payment as captured if the Klarna order is captured before
+    // ::capturePayment() is called.
+    if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
+      $payment->getState()
+        ->applyTransitionById('capture');
 
-      // Mark local payment as captured if the Klarna order is captured before
-      // ::capturePayment() is called.
-      if ($orderResponse->getStatus() === Order::STATUS_CAPTURED) {
-        $payment->getState()
-          ->applyTransitionById('capture');
+      $captures = $orderResponse->getCaptures();
 
-        $captures = $orderResponse->getCaptures();
-
-        if ($capture = reset($captures)) {
-          $payment->setRemoteId($capture->getCaptureId());
-        }
-        $payment->setAmount(
-          UnitConverter::toPrice($orderResponse->getCapturedAmount(), $orderResponse->getPurchaseCurrency())
-        )
-          ->save();
-
-        return;
+      if ($capture = reset($captures)) {
+        $payment->setRemoteId($capture->getCaptureId());
       }
-      $plugin->capturePayment($payment, $order->getBalance());
+      $payment->setAmount(
+        UnitConverter::toPrice($orderResponse->getCapturedAmount(), $orderResponse->getPurchaseCurrency())
+      )
+        ->save();
+
+      return;
     }
-    catch (NonKlarnaOrderException | ApiException) {
-    }
+    $plugin->capturePayment($payment, $order->getBalance());
   }
 
   /**
