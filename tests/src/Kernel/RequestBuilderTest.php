@@ -4,6 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\Tests\commerce_klarna_payments\Kernel;
 
+use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Adjustment;
 use Drupal\commerce_order\Entity\OrderInterface;
@@ -255,6 +256,7 @@ class RequestBuilderTest extends KlarnaKernelBase {
    */
   public function testOrderPromotion() : void {
     $order = $this->createOrder();
+    $discount = new Price('-1.1', 'EUR');
     $order->addAdjustment(new Adjustment(
       [
         'type' => 'promotion',
@@ -268,10 +270,12 @@ class RequestBuilderTest extends KlarnaKernelBase {
 
     $request = $this->sut->createSessionRequest($order);
 
-    // Make sure there is discounts are added as negative order lines.
+    // Make sure there is a discount added as negative order line.
+    /** @var \Klarna\Payments\Model\OrderLine[] $discounts */
     $discounts = array_filter($request->getOrderLines(), function (OrderLine $item) {
       return $item->getName() === 'Discount';
     });
+    $this->assertEquals(UnitConverter::toAmount($discount), reset($discounts)->getTotalAmount());
     $this->assertCount(1, $discounts);
     $this->assertEquals(990, $request->getOrderAmount());
   }
