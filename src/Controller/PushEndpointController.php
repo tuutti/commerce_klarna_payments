@@ -58,7 +58,7 @@ class PushEndpointController implements ContainerInjectionInterface {
   /**
    * {@inheritdoc}
    */
-  public static function create(ContainerInterface $container) {
+  public static function create(ContainerInterface $container) : static {
     return new static(
       $container->get('commerce_checkout.checkout_order_manager'),
       $container->get('commerce_klarna_payments.api_manager'),
