@@ -8,6 +8,7 @@ use Drupal\commerce_checkout\CheckoutOrderManagerInterface;
 use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
+use Drupal\commerce_klarna_payments\PaymentGatewayPluginTrait;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_payment\Entity\PaymentGatewayInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
@@ -15,6 +16,7 @@ use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Klarna\ApiException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,6 +30,7 @@ class PushEndpointController implements ContainerInjectionInterface {
 
   use StringTranslationTrait;
   use DependencySerializationTrait;
+  use PaymentGatewayPluginTrait;
 
   /**
    * Constructs a new instance.
@@ -75,50 +78,45 @@ class PushEndpointController implements ContainerInjectionInterface {
    * @param \Symfony\Component\HttpFoundation\Request $request
    *   The request.
    *
-   * @throws \Drupal\commerce\Response\NeedsRedirectException
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response.
    */
-  public function handleRequest(OrderInterface $commerce_order, PaymentGatewayInterface $commerce_payment_gateway, Request $request) {
+  public function handleRequest(OrderInterface $commerce_order, PaymentGatewayInterface $commerce_payment_gateway, Request $request) : Response {
     $klarna_order_id = $request->query->get('klarna_order_id');
 
-    if (empty($klarna_order_id)) {
-      throw new AccessDeniedHttpException('Required parameters missing.');
+    if (empty($klarna_order_id) || $klarna_order_id !== $commerce_order->getData('klarna_order_id')) {
+      return new Response('Klarna order id does not match.');
     }
 
-    if ($klarna_order_id !== $commerce_order->getData('klarna_order_id')) {
-      throw new AccessDeniedHttpException('Required parameters missing.');
+    $orderResponse = $this->apiManager
+      ->getOrder($commerce_order);
+
+    // If the order was already paid (i.e. user came back before finishing
+    // Klarna's workflow and choose a different gateway).
+    if ($commerce_order->isPaid()) {
+      return new Response('Order is paid already.');
     }
 
+    // Check the state of the order.
+    $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
+    if (!in_array($orderResponse->getStatus(), $allowed)) {
+      throw new AccessDeniedHttpException('Order is in invalid state.');
+    }
+
+    $this->eventDispatcher->dispatch(new RequestEvent($commerce_order, $orderResponse), Events::PUSH_ENDPOINT_CALLED);
+
+    $klarna_plugin = $this->getPlugin($commerce_order);
+    $klarna_plugin->getOrCreatePayment($commerce_order);
+
+    // We acknowledge the order, because if the webhook was fired, the order
+    // was maybe not acknowledged on return.
     try {
-      $klarna_order = $this->apiManager
-        ->getOrderManagementApi($commerce_order)
-        ->getOrder($klarna_order_id);
-
-      // If the order was already paid (ie user came back before finishing
-      // Klarna's workflow and choose a different gateway).
-      if ($commerce_order->isPaid()) {
-        throw new AccessDeniedHttpException('Already paid.');
-      }
-
-      // Check the state of the order.
-      $allowed = ['AUTHORIZED', 'PART_CAPTURED', 'CAPTURED'];
-      if (!in_array($klarna_order->getStatus(), $allowed)) {
-        throw new AccessDeniedHttpException('Order is in invalid state.');
-      }
-
-      $this->eventDispatcher->dispatch(new RequestEvent($commerce_order, $klarna_order), Events::PUSH_ENDPOINT_CALLED);
-
-      /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $klarna_plugin */
-      $klarna_plugin = $commerce_payment_gateway->getPlugin();
-      $klarna_plugin->getOrCreatePayment($commerce_order);
-
-      // We acknowledge the order, because if the webhook was fired, the order
-      // was maybe not acknowledged on return.
-      $this->apiManager->acknowledgeOrder($commerce_order, $klarna_order);
-      return new Response('Ok');
+      $this->apiManager->acknowledgeOrder($commerce_order, $orderResponse);
     }
-    catch (\Exception $e) {
-      throw new AccessDeniedHttpException($e->getMessage());
+    catch (ApiException) {
+      throw new AccessDeniedHttpException('Failed to acknowledge order.');
     }
+    return new Response('Ok');
   }
 
 }

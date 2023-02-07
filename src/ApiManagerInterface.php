@@ -29,6 +29,9 @@ interface ApiManagerInterface {
    *
    * @return \Klarna\OrderManagement\Model\Order|null
    *   The klarna order response.
+   *
+   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
+   * @throws \Klarna\ApiException
    */
   public function getOrder(OrderInterface $order) : ? Order;
 

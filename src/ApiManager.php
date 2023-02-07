@@ -53,9 +53,6 @@ final class ApiManager implements ApiManagerInterface {
 
   /**
    * {@inheritdoc}
-   *
-   * @throws \Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException
-   * @throws \Klarna\ApiException
    */
   public function getOrder(OrderInterface $order) : ? Order {
     if (!$orderId = $order->getData('klarna_order_id')) {

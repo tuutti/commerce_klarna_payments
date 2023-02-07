@@ -51,15 +51,9 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
     $gateway = $this->gateway;
     $request = new Request();
 
-    // No order id parameter.
-    try {
-      $controller = $this->createController();
-      $controller->handleRequest($order, $gateway, $request);
-    }
-    catch (\Exception $e) {
-      $this->assertTrue($e instanceof AccessDeniedHttpException);
-      $this->assertEquals('Required parameters missing.', $e->getMessage());
-    }
+    $controller = $this->createController();
+    $response = $controller->handleRequest($order, $gateway, $request);
+    $this->assertEquals('Klarna order id does not match.', $response->getContent());
 
     // Wrong status.
     $request->query->set('klarna_order_id', $orderResponse->getOrderId());
@@ -68,6 +62,7 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
     ];
     $this->populateHttpClient($order, $responses);
 
+    $exceptionWasThrown = FALSE;
     try {
       $controller = $this->createController();
       $controller->handleRequest($order, $gateway, $request);
@@ -75,7 +70,9 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
     catch (\Exception $e) {
       $this->assertTrue($e instanceof AccessDeniedHttpException);
       $this->assertEquals('Order is in invalid state.', $e->getMessage());
+      $exceptionWasThrown = TRUE;
     }
+    static::assertTrue($exceptionWasThrown);
 
     // Order already paid.
     $order->setTotalPaid($order->getBalance());
@@ -84,15 +81,10 @@ class PushEndpointControllerTest extends KlarnaKernelBase {
       new Response(200, [], $this->modelToJson($orderResponse)),
     ];
     $this->populateHttpClient($order, $responses);
+    $controller = $this->createController();
+    $response = $controller->handleRequest($order, $gateway, $request);
 
-    try {
-      $controller = $this->createController();
-      $controller->handleRequest($order, $gateway, $request);
-    }
-    catch (\Exception $e) {
-      $this->assertTrue($e instanceof AccessDeniedHttpException);
-      $this->assertEquals('Already paid.', $e->getMessage());
-    }
+    $this->assertEquals('Order is paid already.', $response->getContent());
   }
 
   /**

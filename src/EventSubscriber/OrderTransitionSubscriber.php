@@ -7,6 +7,7 @@ namespace Drupal\commerce_klarna_payments\EventSubscriber;
 use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
+use Drupal\commerce_klarna_payments\PaymentGatewayPluginTrait;
 use Drupal\Component\Render\FormattableMarkup;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Klarna\ApiException;
@@ -19,6 +20,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Handles order capturing when the order is placed.
  */
 final class OrderTransitionSubscriber implements EventSubscriberInterface {
+
+  use PaymentGatewayPluginTrait;
 
   /**
    * Constructs a new instance.
@@ -56,11 +59,11 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
     }
 
     try {
-      $plugin = $this->apiManager->getPlugin($order);
+      $plugin = $this->getPlugin($order);
     }
     catch (NonKlarnaOrderException) {
+      return;
     }
-
     $orderResponse = $this->apiManager->getOrder($order);
     $payment = $plugin->getOrCreatePayment($order);
 
