@@ -10,7 +10,6 @@ declare(strict_types = 1);
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Klarna\OrderManagement\Model\Order;
 
 /**
  * Implements hook_theme().
