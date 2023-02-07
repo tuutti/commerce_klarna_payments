@@ -68,8 +68,6 @@ class RequestBuilder {
    *
    * @return \Klarna\Payments\Model\Session
    *   The request data.
-   *
-   * @todo Support promotions.
    */
   public function createSessionRequest(OrderInterface $order) : Session {
     /** @var \Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway\Klarna $plugin */

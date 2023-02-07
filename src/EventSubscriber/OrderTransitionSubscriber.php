@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
-use Drupal\commerce_klarna_payments\ApiManager;
+use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Bridge\UnitConverter;
 use Drupal\commerce_klarna_payments\Exception\NonKlarnaOrderException;
 use Drupal\Component\Render\FormattableMarkup;
@@ -23,13 +23,13 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
   /**
    * Constructs a new instance.
    *
-   * @param \Drupal\commerce_klarna_payments\ApiManager $apiManager
+   * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The Klarna connector.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger.
    */
   public function __construct(
-    private ApiManager $apiManager,
+    private ApiManagerInterface $apiManager,
     private LoggerInterface $logger
   ) {
   }

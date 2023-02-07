@@ -21,13 +21,6 @@ final class RequestEvent extends Event {
   private OrderInterface $order;
 
   /**
-   * The model data.
-   *
-   * @var \Klarna\Model\ModelInterface
-   */
-  private ModelInterface $data;
-
-  /**
    * Constructs a new instance.
    *
    * @param \Drupal\commerce_order\Entity\OrderInterface $order
@@ -35,12 +28,8 @@ final class RequestEvent extends Event {
    * @param \Klarna\Model\ModelInterface|null $data
    *   The data.
    */
-  public function __construct(OrderInterface $order, ModelInterface $data = NULL) {
+  public function __construct(OrderInterface $order, public ?ModelInterface $data = NULL) {
     $this->order = clone $order;
-
-    if ($data) {
-      $this->setData($data);
-    }
   }
 
   /**

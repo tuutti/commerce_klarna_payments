@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Drupal\commerce_klarna_payments\Controller;
 
-use Drupal\commerce_checkout\CheckoutOrderManager;
+use Drupal\commerce_checkout\CheckoutOrderManagerInterface;
 use Drupal\commerce_klarna_payments\ApiManagerInterface;
 use Drupal\commerce_klarna_payments\Event\Events;
 use Drupal\commerce_klarna_payments\Event\RequestEvent;
@@ -32,7 +32,7 @@ class PushEndpointController implements ContainerInjectionInterface {
   /**
    * Constructs a new instance.
    *
-   * @param \Drupal\commerce_checkout\CheckoutOrderManager $checkoutOrderManager
+   * @param \Drupal\commerce_checkout\CheckoutOrderManagerInterface $checkoutOrderManager
    *   The checkout order manager.
    * @param \Drupal\commerce_klarna_payments\ApiManagerInterface $apiManager
    *   The api manager.
@@ -44,7 +44,7 @@ class PushEndpointController implements ContainerInjectionInterface {
    *   The event dispatcher.
    */
   public function __construct(
-    protected CheckoutOrderManager $checkoutOrderManager,
+    protected CheckoutOrderManagerInterface $checkoutOrderManager,
     protected ApiManagerInterface $apiManager,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected LoggerChannelInterface $logger,
