@@ -18,6 +18,9 @@ jobs:
           - php-version: 8.2
             core: 10.0.x
             drush: 12.0
+          - php-version: 8.2
+            core: 11.0.x
+            drush: 12.0
     container:
       image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
 
@@ -54,6 +57,8 @@ jobs:
           composer require drupal/$MODULE_NAME -W
           composer require drupal/commerce_shipping
           composer require "drush/drush ^${{ matrix.drush }}" -W
+          composer require tuutti/php-klarna-payments dev-2.x
+          composer require tuutti/php-klarna-ordermanagement dev-2.x
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer require --dev "drupal/coder"
 
