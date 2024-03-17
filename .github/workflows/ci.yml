@@ -10,12 +10,14 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        php-version: ['8.0', '8.1']
+        php-version: ['8.1']
         core: ['9.5.x']
+        drush: ['11.0']
         # Test php 8.2 only on 10.x core.
         include:
           - php-version: 8.2
             core: 10.0.x
+            drush: 12.0
     container:
       image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
 
@@ -37,6 +39,8 @@ jobs:
       - name: Parse $MODULE_NAME from composer.json
         run: echo "MODULE_NAME=$(cat composer.json | jq -r .name | awk -F/ '{print $NF}')" >> $GITHUB_ENV
 
+      - name: Install dev version of Klarna dependencies
+        run: |
       - name: Set variables
         run: echo "DRUPAL_ROOT=$HOME/drupal" >> $GITHUB_ENV
 
@@ -51,7 +55,9 @@ jobs:
           composer config repositories.0 path $GITHUB_WORKSPACE
           composer require drupal/$MODULE_NAME -W
           composer require drupal/commerce_shipping
-          composer require "drush/drush ^11.0"
+          composer require "drush/drush ^${{ matrix.drush }}" -W
+          composer require tuutti/php-klarna-payments 2.x-dev -W
+          composer require tuutti/php-klarna-ordermanagement 2.x-dev -W
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer require --dev "drupal/coder"
 
