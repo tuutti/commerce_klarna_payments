@@ -18,9 +18,6 @@ jobs:
           - php-version: 8.2
             core: 10.0.x
             drush: 12.0
-          - php-version: 8.2
-            core: 11.x
-            drush: 12.0
     container:
       image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
 
