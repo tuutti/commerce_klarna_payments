@@ -56,7 +56,7 @@ jobs:
           composer require drupal/$MODULE_NAME -W
           composer require drupal/commerce_shipping
           composer require "drush/drush ^${{ matrix.drush }}" -W
-          composer require tuutti/php-klarna-payments 2.x-dev -W
+          composer require tuutti/php-klarna-payments 3.x-dev -W
           composer require tuutti/php-klarna-ordermanagement 2.x-dev -W
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer require --dev "drupal/coder"
