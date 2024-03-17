@@ -12,10 +12,12 @@ jobs:
       matrix:
         php-version: ['8.0', '8.1']
         core: ['9.5.x']
+        drush: ['11.0']
         # Test php 8.2 only on 10.x core.
         include:
           - php-version: 8.2
             core: 10.0.x
+            drush: 12.0
     container:
       image: ghcr.io/tuutti/drupal-php-docker:${{ matrix.php-version }}
 
@@ -51,7 +53,7 @@ jobs:
           composer config repositories.0 path $GITHUB_WORKSPACE
           composer require drupal/$MODULE_NAME -W
           composer require drupal/commerce_shipping
-          composer require "drush/drush"
+          composer require "drush/drush ^${{ matrix.drush }}"
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer require --dev "drupal/coder"
 
