@@ -17,6 +17,9 @@
         "webmozart/assert": "*",
         "drupal/commerce": "^2"
     },
+    "conflict": {
+        "tuutti/php-klarna-payments": "<2.2.0"
+    },
     "require-dev": {
         "drupal/commerce_shipping": "^2.0"
     }

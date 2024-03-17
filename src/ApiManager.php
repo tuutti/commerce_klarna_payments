@@ -320,12 +320,15 @@ final class ApiManager implements ApiManagerInterface {
     if (isset($sessionResponse['session_id'])) {
       $order->setData('klarna_session_id', $sessionResponse['session_id'])
         ->save();
-
-      // ::createCreditSession() will return MerchantSession object. Make sure
-      // we return Session object by re-reading the session from Klarna API.
-      $sessionResponse = $sessionRequest->readCreditSession($sessionResponse['session_id']);
     }
 
+    if (!$sessionResponse instanceof Session) {
+      // tuutti/php-klarna-payments 2.1.0+ ::readCreditSession method returns
+      // SessionRead object instead of regular Session. Keep this compatible
+      // with 3.x Klarna module.
+      // @todo Convert this to SessionRead in 4.x version.
+      return new Session((array) $sessionResponse->jsonSerialize());
+    }
     return $sessionResponse;
   }
 
