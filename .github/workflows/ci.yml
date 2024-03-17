@@ -41,8 +41,8 @@ jobs:
 
       - name: Install dev version of Klarna dependencies
         run: |
-          composer require tuutti/php-klarna-payments dev-2.x --no-install
-          composer require tuutti/php-klarna-ordermanagement dev-2.x --no-install
+          composer require tuutti/php-klarna-payments 2.x-dev --no-install
+          composer require tuutti/php-klarna-ordermanagement 2.x-dev --no-install
 
       - name: Set variables
         run: echo "DRUPAL_ROOT=$HOME/drupal" >> $GITHUB_ENV
