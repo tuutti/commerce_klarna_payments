@@ -12,8 +12,8 @@
     },
     "require": {
         "php": ">=8.0",
-        "tuutti/php-klarna-payments": "^1.0 || ^2.0",
-        "tuutti/php-klarna-ordermanagement": "^1.0 || ^2.0",
+        "tuutti/php-klarna-payments": "^2.0",
+        "tuutti/php-klarna-ordermanagement": "^2.0",
         "webmozart/assert": "*",
         "drupal/commerce": "^2"
     },
