@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
@@ -33,7 +33,7 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
    */
   public function __construct(
     private ApiManagerInterface $apiManager,
-    private LoggerInterface $logger
+    private LoggerInterface $logger,
   ) {
   }
 

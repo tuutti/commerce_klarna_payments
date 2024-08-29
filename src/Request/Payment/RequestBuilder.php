@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\Request\Payment;
 
@@ -13,9 +13,9 @@ use Drupal\commerce_product\Entity\ProductVariationInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Klarna\OrderManagement\Model\Capture;
+use Klarna\Payments\Model\Address;
 use Klarna\Payments\Model\MerchantUrls;
 use Klarna\Payments\Model\Options;
-use Klarna\Payments\Model\Address;
 use Klarna\Payments\Model\OrderLine;
 use Klarna\Payments\Model\Session;
 
@@ -33,7 +33,7 @@ class RequestBuilder {
    *   The language manager.
    */
   public function __construct(
-    protected LanguageManagerInterface $languageManager
+    protected LanguageManagerInterface $languageManager,
   ) {
   }
 

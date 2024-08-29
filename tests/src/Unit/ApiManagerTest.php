@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\Tests\commerce_klarna_payments\Unit;
 
@@ -15,8 +15,8 @@ use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
-use Klarna\OrderManagement\Model\Capture;
 use Klarna\Model\ModelInterface;
+use Klarna\OrderManagement\Model\Capture;
 use Klarna\OrderManagement\Model\Order;
 use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
