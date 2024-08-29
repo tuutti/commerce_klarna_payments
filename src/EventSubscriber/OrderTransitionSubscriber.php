@@ -103,6 +103,13 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
     $order = $event->getEntity();
 
     try {
+      $plugin = $this->getPlugin($order);
+    }
+    catch (NonKlarnaOrderException) {
+      return;
+    }
+
+    try {
       $orderRequest = $this->apiManager->getOrder($order);
 
       // Set the order number only if it's not set yet.
