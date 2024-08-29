@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\Controller;
 
@@ -51,7 +51,7 @@ class PushEndpointController implements ContainerInjectionInterface {
     protected ApiManagerInterface $apiManager,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected LoggerChannelInterface $logger,
-    protected EventDispatcherInterface $eventDispatcher
+    protected EventDispatcherInterface $eventDispatcher,
   ) {
   }
 

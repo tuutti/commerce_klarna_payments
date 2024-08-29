@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\Plugin\Commerce\PaymentGateway;
 
@@ -16,6 +16,7 @@ use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsAuthorization
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsNotificationsInterface;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\SupportsRefundsInterface;
 use Drupal\commerce_price\Price;
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 use Klarna\ApiException;
@@ -244,7 +245,7 @@ final class Klarna extends OffsitePaymentGatewayBase implements SupportsAuthoriz
 
       if (!in_array($orderResponse->getStatus(), $allowed)) {
         throw new PaymentGatewayException(
-          (string) $this->t('Order is in invalid state [@state], one of @expected expected.', [
+          (string) new FormattableMarkup('Order is in invalid state [@state], one of @expected expected.', [
             '@state' => $orderResponse->getStatus(),
             '@expected' => implode(',', $allowed),
           ])

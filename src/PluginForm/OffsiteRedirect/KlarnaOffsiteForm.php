@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\PluginForm\OffsiteRedirect;
 
@@ -46,7 +46,7 @@ final class KlarnaOffsiteForm extends PaymentOffsiteForm implements ContainerInj
   public function __construct(
     private ApiManagerInterface $apiManager,
     private LoggerInterface $logger,
-    private MessengerInterface $messenger
+    private MessengerInterface $messenger,
   ) {
   }
 

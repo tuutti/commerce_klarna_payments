@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments;
 
@@ -36,6 +36,25 @@ trait PaymentGatewayPluginTrait {
       throw new NonKlarnaOrderException('Payment plugin is not Klarna.');
     }
     return $plugin;
+  }
+
+  /**
+   * Whether the order is using Klarna payment method.
+   *
+   * @param \Drupal\commerce_order\Entity\OrderInterface $order
+   *   The order.
+   *
+   * @return bool
+   *   TRUE if the order is using Klarna payment plugin.
+   */
+  public function isKlarnaOrder(OrderInterface $order) : bool {
+    try {
+      $this->getPlugin($order);
+    }
+    catch (NonKlarnaOrderException) {
+      return FALSE;
+    }
+    return TRUE;
   }
 
 }

@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\EventSubscriber;
 
@@ -33,7 +33,7 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
    */
   public function __construct(
     private ApiManagerInterface $apiManager,
-    private LoggerInterface $logger
+    private LoggerInterface $logger,
   ) {
   }
 
@@ -102,6 +102,10 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
     /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
     $order = $event->getEntity();
 
+    if (!$this->isKlarnaOrder($order)) {
+      return;
+    }
+
     try {
       $orderRequest = $this->apiManager->getOrder($order);
 
@@ -116,7 +120,7 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
           'merchant_reference1' => $order->getOrderNumber(),
         ]));
     }
-    catch (ApiException | NonKlarnaOrderException $e) {
+    catch (ApiException $e) {
       $this->logger->error(
         new FormattableMarkup('Failed to update merchant references (#@order)  @message', [
           '@message' => $e->getMessage(),

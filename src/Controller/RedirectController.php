@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments\Controller;
 
@@ -44,7 +44,7 @@ class RedirectController implements ContainerInjectionInterface {
     protected CheckoutOrderManagerInterface $checkoutOrderManager,
     protected MessengerInterface $messenger,
     protected ApiManagerInterface $apiManager,
-    protected LoggerInterface $logger
+    protected LoggerInterface $logger,
   ) {
   }
 
@@ -111,7 +111,7 @@ class RedirectController implements ContainerInjectionInterface {
   private function redirectOnFailure(
     OrderInterface $order,
     TranslatableMarkup $message,
-    \Exception $exception = NULL
+    \Exception $exception = NULL,
   ) : void {
 
     $loggerMessage = (string) $message;

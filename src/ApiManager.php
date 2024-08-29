@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare(strict_types=1);
 
 namespace Drupal\commerce_klarna_payments;
 
@@ -12,19 +12,19 @@ use Drupal\commerce_klarna_payments\Request\Payment\RequestBuilder;
 use Drupal\commerce_order\Entity\OrderInterface;
 use Drupal\commerce_price\Price;
 use GuzzleHttp\ClientInterface;
+use Klarna\ApiException;
 use Klarna\OrderManagement\Api\CapturesApi;
 use Klarna\OrderManagement\Api\OrdersApi;
+use Klarna\OrderManagement\Api\RefundsApi;
+use Klarna\OrderManagement\Model\Capture;
+use Klarna\OrderManagement\Model\Order;
+use Klarna\OrderManagement\Model\RefundObject;
 use Klarna\Payments\Api\OrdersApi as PaymentOrdersApi;
 use Klarna\Payments\Api\SessionsApi;
-use Klarna\ApiException;
-use Klarna\OrderManagement\Model\Capture;
 use Klarna\Payments\Model\CreateOrderRequest;
-use Klarna\OrderManagement\Model\Order;
 use Klarna\Payments\Model\Order as PaymentOrder;
 use Klarna\Payments\Model\Session;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Klarna\OrderManagement\Api\RefundsApi;
-use Klarna\OrderManagement\Model\RefundObject;
 
 /**
  * Provides a service to interact with Klarna.
@@ -47,7 +47,7 @@ final class ApiManager implements ApiManagerInterface {
   public function __construct(
     private EventDispatcherInterface $eventDispatcher,
     private RequestBuilder $requestBuilder,
-    private ClientInterface $client
+    private ClientInterface $client,
   ) {
   }
 
