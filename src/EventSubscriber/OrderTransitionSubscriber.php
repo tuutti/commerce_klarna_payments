@@ -102,10 +102,7 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
     /** @var \Drupal\commerce_order\Entity\OrderInterface $order */
     $order = $event->getEntity();
 
-    try {
-      $plugin = $this->getPlugin($order);
-    }
-    catch (NonKlarnaOrderException) {
+    if (!$this->isKlarnaOrder($order)) {
       return;
     }
 
@@ -123,7 +120,7 @@ final class OrderTransitionSubscriber implements EventSubscriberInterface {
           'merchant_reference1' => $order->getOrderNumber(),
         ]));
     }
-    catch (ApiException | NonKlarnaOrderException $e) {
+    catch (ApiException $e) {
       $this->logger->error(
         new FormattableMarkup('Failed to update merchant references (#@order)  @message', [
           '@message' => $e->getMessage(),
